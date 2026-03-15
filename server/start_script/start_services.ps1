@@ -7,7 +7,9 @@ param(
     [ValidateRange(1, 65535)]
     [int] $Port = 8000,
 
-    [string] $Bind = "::"
+    [string] $Bind = "::",
+
+    [switch] $DualStack
 )
 
 Set-StrictMode -Version Latest
@@ -153,6 +155,36 @@ function Get-PreferredIpv6Address {
     return $addresses | Select-Object -First 1
 }
 
+function Test-IsUsableUlaIpv6 {
+    param(
+        [Parameter(Mandatory = $true)]
+        [Microsoft.Management.Infrastructure.CimInstance] $Address
+    )
+
+    if ($Address.AddressFamily -ne 23) { return $false }
+    if ($Address.AddressState -notin @("Preferred", "Deprecated")) { return $false }
+    if ($Address.SkipAsSource) { return $false }
+    if ($Address.IPAddress -match "^(fe80|::1)") { return $false }
+
+    return $Address.IPAddress -match "^(fd|fc)"
+}
+
+function Get-PreferredUlaIpv6Address {
+    $addresses = Get-NetIPAddress -AddressFamily IPv6 |
+        Where-Object { Test-IsUsableUlaIpv6 $_ } |
+        Sort-Object -Property @{
+            Expression = { $_.AddressState -ne "Preferred" }
+            Ascending = $true
+        }, @{
+            Expression = { $_.PrefixLength }
+            Ascending = $false
+        }, @{
+            Expression = { $_.ValidLifetime.TotalSeconds }
+            Ascending = $false
+        }
+
+    return $addresses | Select-Object -First 1
+}
 function Get-LauncherSettings {
     param(
         [hashtable] $ServerArgsConfig
@@ -278,11 +310,7 @@ function Update-FastDownloadUrl {
 
     $selectedAddress = Get-PreferredIpv6Address -PreferStableIpv6:$PreferStableIpv6
     if (-not $selectedAddress) {
-        if ($PreferStableIpv6) {
-            throw "No usable global DHCPv6 or static IPv6 address was found."
-        }
-
-        throw "No usable temporary global IPv6 address with SuffixOrigin=Random was found."
+        return $null
     }
 
     $normalizedContentPath = $ContentPath.TrimStart("/")
@@ -309,7 +337,6 @@ function Update-FastDownloadUrl {
     Set-Content -LiteralPath $ConfigPath -Value $configLines -Encoding ASCII
     return $selectedAddress.IPAddress
 }
-
 function Start-HttpServer {
     param(
         [switch] $TerminalHosted,
@@ -317,26 +344,37 @@ function Start-HttpServer {
         [ValidateRange(1, 65535)]
         [int] $HttpPort,
 
-        [string] $HttpBind = "::"
+        [string] $HttpBind = "::",
+
+        [switch] $UseDualStack
     )
 
     $httpRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..\http_fast_download_server")).Path
     $startupScript = Join-Path $httpRoot "startup_script.ps1"
 
     if (-not $TerminalHosted) {
+        $httpArguments = @("-Action", "Http", "-InTerminal", "-Port", "$HttpPort", "-Bind", $HttpBind)
+        if ($UseDualStack) {
+            $httpArguments += "-DualStack"
+        }
+
         Open-InWindowsTerminal `
             -WorkingDirectory $httpRoot `
-            -Arguments @("-Action", "Http", "-InTerminal", "-Port", "$HttpPort", "-Bind", $HttpBind) `
+            -Arguments $httpArguments `
             -Title "FASTDL_HTTP_SERVER" `
             -KeepOpen
         return
     }
 
     Set-Location -LiteralPath $httpRoot
-    & $startupScript -Port $HttpPort -Bind $HttpBind
+    if ($UseDualStack) {
+        & $startupScript -Port $HttpPort -Bind $HttpBind -DualStack
+    }
+    else {
+        & $startupScript -Port $HttpPort -Bind $HttpBind
+    }
     exit (Get-NativeExitCodeOrZero)
 }
-
 function Start-StatusTab {
     param(
         [switch] $TerminalHosted
@@ -362,11 +400,27 @@ function Start-StatusTab {
         -ShareableIpv6 $shareableIpv6 `
         -GamePort $matchContext.GamePort `
         -GamePassword $matchContext.GamePassword
+    $ulaIpv6Address = Get-PreferredUlaIpv6Address
+    $ulaIpv6 = if ($ulaIpv6Address) { $ulaIpv6Address.IPAddress } else { "" }
+    $ulaCommandText = Get-ConnectCommandText `
+        -ShareableIpv6 $ulaIpv6 `
+        -GamePort $matchContext.GamePort `
+        -GamePassword $matchContext.GamePassword
 
     Write-Host ""
     Write-Host "SHARE THIS WITH PLAYERS:"
     if ([string]::IsNullOrWhiteSpace($commandText)) {
-        Write-Host "Connect command was not generated."
+        Write-Host "NO PUBLIC IPV6 WAS DETECTED."
+        Write-Host "The server still started."
+        Write-Host "FastDL public URL was not changed, so any manual IPv4 or LAN URL you already set can still be used."
+        Write-Host "Connect with IPv4 for remote players if you have public IPv4 and port forwarding configured."
+        if ([string]::IsNullOrWhiteSpace($ulaCommandText)) {
+            Write-Host "No ULA IPv6 address was detected for LAN-only sharing."
+        }
+        else {
+            Write-Host "For same-LAN players, you can try this ULA connect command:"
+            Write-Host $ulaCommandText
+        }
     }
     else {
         Write-Host $commandText
@@ -374,7 +428,6 @@ function Start-StatusTab {
     Write-Host ""
     return
 }
-
 function Start-GameServer {
     param(
         [switch] $TerminalHosted
@@ -413,7 +466,11 @@ function Start-MatchServer {
 
     if (-not $TerminalHosted) {
         Set-Location -LiteralPath $serverRoot
-        $null = Update-FastDownloadUrl -ConfigPath $matchContext.ModConfig -FastDlPort 8000 -ContentPath "cod4/" -PreferStableIpv6:$matchContext.PreferStableIpv6
+        $publicFastDlIpv6 = Update-FastDownloadUrl -ConfigPath $matchContext.ModConfig -FastDlPort 8000 -ContentPath "cod4/" -PreferStableIpv6:$matchContext.PreferStableIpv6
+        $httpArguments = @("-Action", "Http", "-InTerminal", "-Port", "8000", "-Bind", "::")
+        if (-not $publicFastDlIpv6) {
+            $httpArguments += "-DualStack"
+        }
 
         Open-InWindowsTerminal `
             -WorkingDirectory $serverRoot `
@@ -425,7 +482,7 @@ function Start-MatchServer {
 
         Open-InWindowsTerminal `
             -WorkingDirectory $httpRoot `
-            -Arguments @("-Action", "Http", "-InTerminal", "-Port", "8000", "-Bind", "::") `
+            -Arguments $httpArguments `
             -NewTab `
             -WindowId 0 `
             -Title "FASTDL_HTTP_SERVER" `
@@ -442,7 +499,11 @@ function Start-MatchServer {
     }
 
     Set-Location -LiteralPath $serverRoot
-    $null = Update-FastDownloadUrl -ConfigPath $matchContext.ModConfig -FastDlPort 8000 -ContentPath "cod4/" -PreferStableIpv6:$matchContext.PreferStableIpv6
+    $publicFastDlIpv6 = Update-FastDownloadUrl -ConfigPath $matchContext.ModConfig -FastDlPort 8000 -ContentPath "cod4/" -PreferStableIpv6:$matchContext.PreferStableIpv6
+    $httpArguments = @("-Action", "Http", "-InTerminal", "-Port", "8000", "-Bind", "::")
+    if (-not $publicFastDlIpv6) {
+        $httpArguments += "-DualStack"
+    }
 
     Open-InWindowsTerminal `
         -WorkingDirectory $serverRoot `
@@ -454,7 +515,7 @@ function Start-MatchServer {
 
     Open-InWindowsTerminal `
         -WorkingDirectory $httpRoot `
-        -Arguments @("-Action", "Http", "-InTerminal", "-Port", "8000", "-Bind", "::") `
+        -Arguments $httpArguments `
         -NewTab `
         -WindowId 0 `
         -Title "FASTDL_HTTP_SERVER" `
@@ -470,13 +531,12 @@ function Start-MatchServer {
 
     exit 0
 }
-
 switch ($Action) {
     "Match" {
         Start-MatchServer -TerminalHosted:$InTerminal
     }
     "Http" {
-        Start-HttpServer -TerminalHosted:$InTerminal -HttpPort $Port -HttpBind $Bind
+        Start-HttpServer -TerminalHosted:$InTerminal -HttpPort $Port -HttpBind $Bind -UseDualStack:$DualStack
     }
     "Game" {
         Start-GameServer -TerminalHosted:$InTerminal
@@ -488,3 +548,8 @@ switch ($Action) {
         throw "Unsupported action: $Action"
     }
 }
+
+
+
+
+

@@ -4,7 +4,9 @@ param(
     [int] $Port = 8000,
 
     [Parameter(Position = 1)]
-    [string] $Bind = "::"
+    [string] $Bind = "::",
+
+    [switch] $DualStack
 )
 
 Set-StrictMode -Version Latest
@@ -65,5 +67,35 @@ Write-Host "FASTDL WILL STOP WORKING IF YOU CLOSE IT."
 Write-Host ""
 Write-Host "Press Ctrl+C to stop.`n"
 
-& $pythonInvocation.FilePath @($pythonInvocation.Arguments + @("-m", "http.server", "$Port", "--bind", $Bind))
+if ($DualStack -and $Bind -eq "::") {
+    $dualStackServerScript = @"
+import functools
+import http.server
+import os
+import socket
+import sys
 
+port = int(sys.argv[1])
+bind = sys.argv[2]
+
+class DualStackHTTPServer(http.server.ThreadingHTTPServer):
+    address_family = socket.AF_INET6
+    allow_reuse_address = True
+
+    def server_bind(self):
+        try:
+            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        except OSError:
+            pass
+        super().server_bind()
+
+handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.getcwd())
+with DualStackHTTPServer((bind, port), handler) as httpd:
+    httpd.serve_forever()
+"@
+
+    $dualStackServerScript | & $pythonInvocation.FilePath @($pythonInvocation.Arguments + @('-', "$Port", $Bind))
+}
+else {
+    & $pythonInvocation.FilePath @($pythonInvocation.Arguments + @("-m", "http.server", "$Port", "--bind", $Bind))
+}

@@ -15,36 +15,35 @@ This repository does **not** distribute the base game, COD4X binaries for redist
 
 ## COD4X and Promod Links
 
-If you found this repository while looking for **COD4X** or **Promod** itself, use these official project links:
+If you found this repository while looking for **COD4X** or **Promod** itself, use these official project links for downloading or reference:
 
 - **COD4X server project:** [callofduty4x/CoD4x_Server on GitHub](https://github.com/callofduty4x/CoD4x_Server)
 - **COD4X forums / project site:** [cod4x.ovh](https://cod4x.ovh)
 - **Promod official download page:** [promod.github.io](https://promod.github.io/)
 - **Promod source code:** [promod/promod4 on GitHub](https://github.com/promod/promod4)
-
-This package is built to help you use those projects more easily in a practical Windows setup workflow.
+ .
 
 ## Who This Project Is For
 
 This package is aimed at:
 - Windows users who want a practical way to install and run a **COD4 Promod server**
-- server hosts who do not want to manually wire together **COD4X**, **PowerShell 7**, **Python**, **FastDL**, and startup arguments
+- server hosts who do not want to manually wire together **COD4X**, **PowerShell 7**, **Python**, **FastDL**, and startup arguments. A complicated affair!
 - users who want a beginner-friendly install flow but still want plain-text config files they can edit afterward
 - people publishing or sharing a local COD4 server package for friends, scrims, mixes, or match hosting
 
 ## What This COD4 Server Installer Does
 
 The installer and startup scripts handle the following:
-- require `winget` and PowerShell 7 for the installation flow
+- require `winget` and PowerShell 7 for the installation
 - detect and install a usable 64-bit Python 3 runtime for the FastDL HTTP server
 - optionally copy base COD4 files from an existing install
 - optionally download and install COD4X dedicated server files
 - guide you through choosing the Promod mod folder name
 - tell you exactly where to copy Promod files for both the game server and FastDL
 - validate that the required files exist before finishing
-- update `server\start_script\server_args.psd1`
+- update `server\start_script\server_args.psd1` . This replaces the traditional command line arguments for the server.
 - update the selected mod's `server_match.cfg`
-- launch the COD4 match server, FastDL server, and a dedicated connect-command tab in Windows Terminal
+- launch the COD4 match server, FastDL server, and a dedicated connect-command tab in Windows Terminal, with a single click.
 
 ## What This Project Does Not Include
 
@@ -126,26 +125,25 @@ The FastDL server launcher.
 
 It:
 - locates a usable Python runtime
-- starts the built-in Python HTTP server bound to IPv6
-- warns the user not to close the FastDL tab or terminal while the server is in use
+- starts the built-in Python HTTP server bound to IPv6. Remember these scripts are primarily built for ipv6, but feel free to manually edit or add ipv4 if you dont have ipv6.
 
 ## Requirements
 
-To use this package as intended, you need:
+To use this package as intended, you the need:
 - Windows
 - `winget`
 - PowerShell 7
 - a usable 64-bit Python 3 runtime
 - base COD4 files
 - COD4X dedicated server files
-- a Promod mod folder with `server_match.cfg`
+- a Promod mod  with `server_match.cfg`
 
-The package can help install PowerShell 7, Python, and COD4X, but it still depends on you providing the game and mod files.
+The package automatically /can help install PowerShell 7, Python, and COD4X
 
 ## How to Set Up a COD4 Promod Server on Windows
 
 1. Run `install_server.bat`.
-2. Let the installer handle PowerShell 7 and Python if they are missing.
+2. Let the installer handle PowerShell 7 and Python if they are missing. install these manually if in some cases the installer fails.
 3. Copy or confirm the base COD4 files.
 4. Install or confirm the COD4X server files.
 5. Enter the exact Promod mod folder name you want to use.
@@ -156,17 +154,13 @@ The package can help install PowerShell 7, Python, and COD4X, but it still depen
 8. Run `server\start_match.bat`.
 9. Copy the generated `connect [ipv6]:port` command from the connect-command tab and share it with players.
 
-For the more detailed beginner and complete guide, read [BEGINNER_GUIDE.txt](./BEGINNER_GUIDE.txt).
+For the more detailed and complete guide, read [BEGINNER_GUIDE.txt](./BEGINNER_GUIDE.txt).
 
-## Promod and FastDL Folder Rules
+## FastDL Folder Rules
 
 Your selected mod folder name must match in both locations:
 - `server\mods\<your_mod>\`
 - `http_fast_download_server\cod4\mods\<your_mod>\`
-
-At minimum, the selected game-server mod folder must contain:
-- the Promod files you want to run
-- `server_match.cfg`
 
 If you use custom maps, copy them to both locations as well:
 - `server\usermaps\<mapname>\`
@@ -181,24 +175,17 @@ When you run `server\start_match.bat`, the launcher is intended to create separa
 
 Important behavior:
 - the FastDL tab must remain open while players are downloading files
-- the connect-command tab is meant to remain visible until you copy the command
-- the actual server process runs separately from the connect-command tab so its console output does not bury the shareable connection line
+- the connect-command tab is meant to remain visible for ease of use of copy pasting the complete connect ip command to your friends
 
 ## Why This Is Useful for COD4X and Promod Hosts
 
-A typical COD4 Promod setup on Windows often requires several separate manual steps:
-- getting PowerShell 7 installed and usable
-- installing Python for FastDL
-- copying base game files into the right folders
-- installing COD4X correctly
-- matching the Promod folder name across server and FastDL locations
-- keeping the shareable connect command visible while the server is running
+A typical COD4 Promod setup on Windows often requires several separate manual steps that can take hours for a first timer to understand and execute. 
 
-This repository is meant to reduce that setup friction and make a repeatable **COD4X + Promod + FastDL** workflow easier to distribute and maintain.
+This is meant to reduce that setup friction and make a repeatable **COD4X + Promod + FastDL** workflow easier to distribute and maintain.
 
 ## IPv6 Notes
 
-This package is mainly designed around IPv6.
+This package is mainly designed around IPv6 but still works with ipv4.
 
 It can:
 - detect a usable global IPv6 address
@@ -229,8 +216,8 @@ The selected mod's main server config is:
 
 ## Safety and Scope
 
-These scripts are installation and startup helpers only.
-They do not change the runtime performance of your COD4 server beyond starting the required supporting processes and updating config values.
+These scripts are installation and startup helpers/automations only.
+They do not change the runtime performance of your COD4 server or any other application.
 
 ## Troubleshooting
 
@@ -239,14 +226,14 @@ If the installer fails, the most common reasons are:
 - PowerShell 7 is missing or outdated
 - Python 3 64-bit is unavailable
 - base game files were not copied into `server\main` and `server\zone`
-- COD4X files were not copied into `server\`
+- COD4X files were not copied into `server\` appropriately
 - the Promod folder was not copied into both Promod locations
 - `server_match.cfg` is missing from the selected mod folder
 
 If startup fails, check:
 - `server\start_script\server_args.psd1`
 - the selected mod folder and `server_match.cfg`
-- whether you have a usable IPv6 address
+- whether you have a usable IPv6 address / properly setup ipv4
 - whether the FastDL tab is still running
 
 ## Recommended Reading
@@ -260,10 +247,8 @@ If startup fails, check:
 ## Contributing
 
 If you make improvements to the installer or startup flow, keep the project focused on:
-- practical Windows setup
+- practical Windows setup leaading to simplicity.
 - clear prompts for non-expert users
-- editable plain-text config files
-- robust startup behavior
 
 ## Status
 
