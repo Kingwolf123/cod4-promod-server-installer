@@ -1,7 +1,5 @@
 # COD4 Promod Server Installer for Windows (COD4X + FastDL)
 
-This repository is a **Call of Duty 4: Modern Warfare / COD4 Promod server installer package for Windows**.
-
 It is designed to help people who are searching for things like:
 - how to host a COD4 Promod server on Windows
 - how to install a COD4X server for Call of Duty 4
