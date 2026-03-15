@@ -153,7 +153,7 @@ The package can help install PowerShell 7, Python, and COD4X, but it still depen
 8. Run `server\start_match.bat`.
 9. Copy the generated `connect [ipv6]:port` command from the connect-command tab and share it with players.
 
-For the more detailed beginner flow, read [BEGINNER_GUIDE.txt](./BEGINNER_GUIDE.txt).
+For the more detailed beginner and complete guide, read [BEGINNER_GUIDE.txt](./BEGINNER_GUIDE.txt).
 
 ## Promod and FastDL Folder Rules
 
