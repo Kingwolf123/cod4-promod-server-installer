@@ -208,6 +208,7 @@ If you want the launcher to prefer a stable DHCPv6 or static IPv6 instead of a t
 Specifically:
 - `Launcher -> PreferStableIpv6 = $true`
 
+Please ensure your ipv6 firewall allows the ports or is disabled.
 ## Editing and Customization
 
 Normal editable launch values live in:
