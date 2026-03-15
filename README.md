@@ -1,6 +1,8 @@
 # COD4 Promod Server Installer for Windows (COD4X + FastDL)
 # Setup a promod server in 2 minutes.
 
+Download the cod4_promod_server.zip from the latest release and read instructions 
+
 It is designed to help people who are searching for things like:
 - how to host a COD4 Promod server on Windows
 - how to install a COD4X server for Call of Duty 4
