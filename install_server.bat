@@ -1,5 +1,6 @@
 @echo off
 setlocal EnableExtensions
+title COD4_PROMOD_SERVER_INSTALLER
 
 set "RELAUNCHED=0"
 if /i "%~1"=="--pwsh-relaunched" set "RELAUNCHED=1"
@@ -34,7 +35,7 @@ if defined PWSH_EXE if defined PWSH_MAJOR if %PWSH_MAJOR% GEQ 7 goto run_install
 
 if "%RELAUNCHED%"=="0" (
     echo PowerShell was installed or upgraded. Reopening the installer in a fresh terminal...
-    start "" "%ComSpec%" /k "\"%~f0\" --pwsh-relaunched"
+    start "COD4_PROMOD_SERVER_INSTALLER" "%ComSpec%" /k "\"%~f0\" --pwsh-relaunched"
     goto finish_ok
 )
 

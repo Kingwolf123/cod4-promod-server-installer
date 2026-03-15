@@ -7,5 +7,6 @@
     DefaultEmail          = ""
     DefaultLocation       = "Pakistan"
     DefaultGamePort       = "28962"
+    DefaultMaxClients     = "24"
     DefaultStartupMap     = "mp_crash"
 }

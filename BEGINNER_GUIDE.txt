@@ -121,13 +121,17 @@ This starts:
 - the COD4 match server
 - the HTTP fast download server
 
+Create a shortcut of start_match.bat if and copy it wherever convenient > Do NOT create a copy of this file to start.
+
 Step 12 - Share the server address
 ----------------------------------
-When the server starts, the launcher window will show a ready-to-send connect command and wait for you to copy it.
+When the server starts, the launcher window will show a ready-to-send connect command.
 You can copy and send that line directly to your friends.
 
 This package is mainly designed around IPv6. IPv4 can also work, but only if you already have a public IPv4 and the required port forwarding in place.
 If you prefer, you can also give out a stable DHCPv6/static-style IPv6 address instead of the temporary privacy IPv6.
+If the player is on the same home network as the server, you can also try another local IPv6 address, such as a LAN-only one, to see if ping drops from around 5-6 ms to around 2-3 ms.
+That can mean the traffic is staying more purely on your local LAN instead of taking a less direct path through the router.
 To find out if you even have ipv6, go to https://test-ipv6.com/ and check score at the bottom. A 0/10 means you do not currently have an ipv6. A green score of 9/10 or 10/10 means you have ipv6.
 
 Slightly Advanced :

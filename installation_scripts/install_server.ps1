@@ -471,6 +471,27 @@ function Assert-ValidPortValue {
     }
 }
 
+function Assert-ValidRconPassword {
+    param([string] $Password)
+
+    if ([string]::IsNullOrWhiteSpace($Password)) {
+        throw "RCON password cannot be empty. It must be at least 8 characters long."
+    }
+
+    if ($Password.Trim().Length -lt 8) {
+        throw "RCON password must be at least 8 characters long."
+    }
+}
+
+function Assert-ValidMaxClientsValue {
+    param([string] $ValueText)
+
+    $maxClients = 0
+    if (-not [int]::TryParse($ValueText, [ref] $maxClients) -or $maxClients -lt 1 -or $maxClients -gt 64) {
+        throw "sv_maxclients must be a number from 1 to 64."
+    }
+}
+
 function Wait-ForPromodFiles {
     param([string] $ModFolder)
 
@@ -526,12 +547,15 @@ Assert-PathExists -Path $serverMatchCfg -HelpText "server_match.cfg is missing f
 Write-Step "Server setup"
 $serverName = Read-DefaultValue -Prompt "Server name" -DefaultValue $config.DefaultServerName
 $gamePassword = Read-DefaultValue -Prompt "Game password" -DefaultValue $config.DefaultGamePassword
-$rconPassword = Read-DefaultValue -Prompt "RCON password" -DefaultValue $config.DefaultRconPassword
+$rconPassword = Read-DefaultValue -Prompt "RCON password (minimum 8 characters)" -DefaultValue $config.DefaultRconPassword
+Assert-ValidRconPassword -Password $rconPassword
 $adminName = Read-DefaultValue -Prompt "Admin name" -DefaultValue $config.DefaultAdminName
 $email = Read-DefaultValue -Prompt "Admin email" -DefaultValue $config.DefaultEmail
 $location = Read-DefaultValue -Prompt "Server location" -DefaultValue $config.DefaultLocation
 $gamePort = Read-DefaultValue -Prompt "Game port" -DefaultValue $config.DefaultGamePort
 Assert-ValidPortValue -PortText $gamePort
+$maxClients = Read-DefaultValue -Prompt "Max clients (sv_maxclients)" -DefaultValue $config.DefaultMaxClients
+Assert-ValidMaxClientsValue -ValueText $maxClients
 $startupMap = Read-DefaultValue -Prompt "Startup map" -DefaultValue $config.DefaultStartupMap
 
 Write-Step "Updating server_args.psd1"
@@ -540,6 +564,7 @@ Backup-FileIfNeeded -Path $serverArgsPath
 $serverArgsContent = Get-Content -LiteralPath $serverArgsPath -Raw
 $serverArgsContent = Set-ServerArgsValue -Content $serverArgsContent -Name "fs_game" -Value ("mods/" + $modFolder)
 $serverArgsContent = Set-ServerArgsValue -Content $serverArgsContent -Name "net_port" -Value $gamePort
+$serverArgsContent = Set-ServerArgsValue -Content $serverArgsContent -Name "sv_maxclients" -Value $maxClients
 $serverArgsContent = Set-ServerArgsValue -Content $serverArgsContent -Name "rcon_password" -Value $rconPassword
 $serverArgsContent = Set-DirectCommandValue -Content $serverArgsContent -Command "+map" -Value $startupMap
 Set-Content -LiteralPath $serverArgsPath -Value $serverArgsContent -Encoding ASCII

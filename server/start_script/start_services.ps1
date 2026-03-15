@@ -7,9 +7,7 @@ param(
     [ValidateRange(1, 65535)]
     [int] $Port = 8000,
 
-    [string] $Bind = "::",
-
-    [string] $ConnectCommand = ""
+    [string] $Bind = "::"
 )
 
 Set-StrictMode -Version Latest
@@ -197,6 +195,70 @@ function Get-ConfigQuotedValue {
     return ""
 }
 
+function Get-MatchStartupContext {
+    $serverRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
+    $httpRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..\http_fast_download_server")).Path
+    $serverArgsPath = Join-Path $PSScriptRoot "server_args.psd1"
+
+    try {
+        $serverArgsConfig = Import-PowerShellDataFile -LiteralPath $serverArgsPath
+    }
+    catch {
+        $serverArgsBackupPath = "$serverArgsPath.bak"
+        if (Test-Path -LiteralPath $serverArgsBackupPath) {
+            throw "server_args.psd1 could not be parsed. Restore server\start_script\server_args.psd1 from server_args.psd1.bak or rerun install_server.bat. $($_.Exception.Message)"
+        }
+
+        throw "server_args.psd1 could not be parsed. Rerun install_server.bat. $($_.Exception.Message)"
+    }
+
+    $serverArgs = @($serverArgsConfig.MatchServer)
+    $launcherSettings = Get-LauncherSettings -ServerArgsConfig $serverArgsConfig
+    $preferStableIpv6 = $false
+    if ($launcherSettings.ContainsKey("PreferStableIpv6")) {
+        $preferStableIpv6 = [bool] $launcherSettings.PreferStableIpv6
+    }
+
+    $modGame = Get-ServerArgValue -ServerArgs $serverArgs -Name "fs_game"
+    if (-not $modGame) {
+        throw "fs_game was not found in server_args.psd1"
+    }
+
+    $modConfig = Join-Path $serverRoot (($modGame -replace "/", "\") + "\server_match.cfg")
+    $gamePort = Get-ServerArgValue -ServerArgs $serverArgs -Name "net_port"
+    $gamePassword = Get-ConfigQuotedValue -ConfigPath $modConfig -Directive "set g_password"
+
+    return @{
+        HttpRoot         = $httpRoot
+        ModConfig        = $modConfig
+        GamePassword     = $gamePassword
+        GamePort         = $gamePort
+        PreferStableIpv6 = $preferStableIpv6
+        ServerArgs       = $serverArgs
+        ServerArgsConfig = $serverArgsConfig
+        ServerRoot       = $serverRoot
+    }
+}
+
+function Get-ConnectCommandText {
+    param(
+        [string] $ShareableIpv6,
+        [string] $GamePort,
+        [string] $GamePassword
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ShareableIpv6) -or [string]::IsNullOrWhiteSpace($GamePort)) {
+        return ""
+    }
+
+    $connectCommand = "connect [$ShareableIpv6]:$GamePort"
+    if (-not [string]::IsNullOrWhiteSpace($GamePassword)) {
+        $connectCommand += ";password $GamePassword"
+    }
+
+    return $connectCommand
+}
+
 function Update-FastDownloadUrl {
     param(
         [Parameter(Mandatory = $true)]
@@ -277,33 +339,40 @@ function Start-HttpServer {
 
 function Start-StatusTab {
     param(
-        [switch] $TerminalHosted,
-        [string] $CommandText
+        [switch] $TerminalHosted
     )
 
-    $serverRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
+    $matchContext = Get-MatchStartupContext
+    $serverRoot = $matchContext.ServerRoot
 
     if (-not $TerminalHosted) {
         Open-InWindowsTerminal `
             -WorkingDirectory $serverRoot `
-            -Arguments @("-Action", "Status", "-InTerminal", "-ConnectCommand", $CommandText) `
+            -Arguments @("-Action", "Status", "-InTerminal") `
             -NewTab `
             -WindowId 0 `
-            -Title "CONNECT_COMMAND"
+            -Title "CONNECT_COMMAND" `
+            -KeepOpen
         return
     }
 
+    $shareableIpv6Address = Get-PreferredIpv6Address -PreferStableIpv6:$matchContext.PreferStableIpv6
+    $shareableIpv6 = if ($shareableIpv6Address) { $shareableIpv6Address.IPAddress } else { "" }
+    $commandText = Get-ConnectCommandText `
+        -ShareableIpv6 $shareableIpv6 `
+        -GamePort $matchContext.GamePort `
+        -GamePassword $matchContext.GamePassword
+
     Write-Host ""
     Write-Host "SHARE THIS WITH PLAYERS:"
-    if ([string]::IsNullOrWhiteSpace($CommandText)) {
+    if ([string]::IsNullOrWhiteSpace($commandText)) {
         Write-Host "Connect command was not generated."
     }
     else {
-        Write-Host $CommandText
+        Write-Host $commandText
     }
     Write-Host ""
-    Read-Host "Press Enter after you have copied the connect command" | Out-Null
-    exit 0
+    return
 }
 
 function Start-GameServer {
@@ -338,54 +407,42 @@ function Start-MatchServer {
         [switch] $TerminalHosted
     )
 
-    $serverRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
-    $httpRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..\http_fast_download_server")).Path
-    $serverArgsPath = Join-Path $PSScriptRoot "server_args.psd1"
-    try {
-        $serverArgsConfig = Import-PowerShellDataFile -LiteralPath $serverArgsPath
-    }
-    catch {
-        $serverArgsBackupPath = "$serverArgsPath.bak"
-        if (Test-Path -LiteralPath $serverArgsBackupPath) {
-            throw "server_args.psd1 could not be parsed. Restore server\start_script\server_args.psd1 from server_args.psd1.bak or rerun install_server.bat. $($_.Exception.Message)"
-        }
-
-        throw "server_args.psd1 could not be parsed. Rerun install_server.bat. $($_.Exception.Message)"
-    }
-    $serverArgs = @($serverArgsConfig.MatchServer)
-    $launcherSettings = Get-LauncherSettings -ServerArgsConfig $serverArgsConfig
-    $preferStableIpv6 = $false
-    if ($launcherSettings.ContainsKey("PreferStableIpv6")) {
-        $preferStableIpv6 = [bool] $launcherSettings.PreferStableIpv6
-    }
-
-    $modGame = Get-ServerArgValue -ServerArgs $serverArgs -Name "fs_game"
-    if (-not $modGame) {
-        throw "fs_game was not found in server_args.psd1"
-    }
-
-    $modConfig = Join-Path $serverRoot (($modGame -replace "/", "\") + "\server_match.cfg")
-    $gamePort = Get-ServerArgValue -ServerArgs $serverArgs -Name "net_port"
-    $gamePassword = Get-ConfigQuotedValue -ConfigPath $modConfig -Directive "set g_password"
+    $matchContext = Get-MatchStartupContext
+    $serverRoot = $matchContext.ServerRoot
+    $httpRoot = $matchContext.HttpRoot
 
     if (-not $TerminalHosted) {
+        Set-Location -LiteralPath $serverRoot
+        $null = Update-FastDownloadUrl -ConfigPath $matchContext.ModConfig -FastDlPort 8000 -ContentPath "cod4/" -PreferStableIpv6:$matchContext.PreferStableIpv6
+
         Open-InWindowsTerminal `
             -WorkingDirectory $serverRoot `
-            -Arguments @("-Action", "Match", "-InTerminal") `
-            -Title "COD4_SERVER_LAUNCHER"
+            -Arguments @("-Action", "Game", "-InTerminal") `
+            -Title "COD4_MATCH_SERVER" `
+            -KeepOpen
+
+        Start-Sleep -Milliseconds 300
+
+        Open-InWindowsTerminal `
+            -WorkingDirectory $httpRoot `
+            -Arguments @("-Action", "Http", "-InTerminal", "-Port", "8000", "-Bind", "::") `
+            -NewTab `
+            -WindowId 0 `
+            -Title "FASTDL_HTTP_SERVER" `
+            -KeepOpen
+
+        Open-InWindowsTerminal `
+            -WorkingDirectory $serverRoot `
+            -Arguments @("-Action", "Status", "-InTerminal") `
+            -NewTab `
+            -WindowId 0 `
+            -Title "CONNECT_COMMAND" `
+            -KeepOpen
         return
     }
 
     Set-Location -LiteralPath $serverRoot
-    $shareableIpv6 = Update-FastDownloadUrl -ConfigPath $modConfig -FastDlPort 8000 -ContentPath "cod4/" -PreferStableIpv6:$preferStableIpv6
-
-    $connectCommand = ""
-    if ($shareableIpv6 -and $gamePort) {
-        $connectCommand = "connect [$shareableIpv6]:$gamePort"
-        if (-not [string]::IsNullOrWhiteSpace($gamePassword)) {
-            $connectCommand += ";password $gamePassword"
-        }
-    }
+    $null = Update-FastDownloadUrl -ConfigPath $matchContext.ModConfig -FastDlPort 8000 -ContentPath "cod4/" -PreferStableIpv6:$matchContext.PreferStableIpv6
 
     Open-InWindowsTerminal `
         -WorkingDirectory $serverRoot `
@@ -405,10 +462,11 @@ function Start-MatchServer {
 
     Open-InWindowsTerminal `
         -WorkingDirectory $serverRoot `
-        -Arguments @("-Action", "Status", "-InTerminal", "-ConnectCommand", $connectCommand) `
+        -Arguments @("-Action", "Status", "-InTerminal") `
         -NewTab `
         -WindowId 0 `
-        -Title "CONNECT_COMMAND"
+        -Title "CONNECT_COMMAND" `
+        -KeepOpen
 
     exit 0
 }
@@ -424,7 +482,7 @@ switch ($Action) {
         Start-GameServer -TerminalHosted:$InTerminal
     }
     "Status" {
-        Start-StatusTab -TerminalHosted:$InTerminal -CommandText $ConnectCommand
+        Start-StatusTab -TerminalHosted:$InTerminal
     }
     default {
         throw "Unsupported action: $Action"
