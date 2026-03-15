@@ -1,0 +1,163 @@
+COD4 Promod 285 Beginner Setup Guide
+====================================
+
+This guide is for people who want a working Promod FPS 285 server with fast download, without learning all the internal server details first.
+
+Quick result
+------------
+After setup, you will mainly use:
+- install_server.bat
+- server\start_match.bat
+
+Do the steps below in order.
+
+Step 1 - Run the installer first
+--------------------------------
+Double-click:
+- install_server.bat
+
+The package first checks that winget is available, because it is needed for both PowerShell 7 and Python setup. Then it checks whether PowerShell 7 is already installed. If it is, the installer starts immediately.
+
+
+
+Step 3 - Python
+---------------
+
+This step is automatic  - to install the latest python 3 64 bit if missing. You may be prompted to install Python.
+
+
+If Python is missing, the installer can install the latest stable 64-bit Python automatically.
+This is used for the HTTP fast download server.
+
+If Python still is not detected after install, restart Windows Terminal once.
+
+
+Step 4 - Base game files
+------------------------
+If you choose automatic copy, point the installer to your existing COD4 game folder.
+The installer will copy:
+- main
+- zone
+
+into:
+- server\
+
+If you choose manual copy instead, make sure these exist before continuing:
+- server\main
+- server\zone
+
+Step 5 - COD4X server files
+---------------------------
+If you choose automatic COD4X install, the installer will download and extract the server files into:
+- server\
+
+If you choose manual copy instead, make sure these exist before continuing:
+- server\cod4x18_dedrun.exe
+
+Step 6 - Choose the Promod mod folder name
+------------------------------------------
+The installer will ask which Promod mod folder name this package should use.
+Enter the exact folder name your Promod files use.
+That folder name will be used in both:
+- server\mods\<your_mod>\
+- http_fast_download_server\cod4\mods\<your_mod>\
+
+Step 7 - Put the Promod files in the game server mod folder
+-----------------------------------------------------------
+After you choose the mod folder name, copy the Promod game files into:
+- server\mods\<your_mod>\
+
+Only copy the necessary files, such as:
+- fps_promod_285.iwd
+- mod.ff
+- z_c_r.iwd
+- server_match.cfg
+
+server_match.cfg must exist in:
+- server\mods\<your_mod>\
+
+A template server_match.cfg is already included in this package.
+
+Step 8 - Put the same Promod files in the FastDL mod folder
+-----------------------------------------------------------
+Copy the same downloadable Promod files into:
+- http_fast_download_server\cod4\mods\<your_mod>\
+
+This is what allows clients to download the mod from your HTTP fast download server.
+
+Step 9 - If you use custom maps, copy them to both places
+---------------------------------------------------------
+Game server map files go here:
+- server\usermaps\<mapname>\
+
+FastDL map files go here:
+- http_fast_download_server\cod4\usermaps\<mapname>\
+
+If the map is only in one place, clients may fail to download or the server may fail to load it correctly.
+
+Step 10 - Finish the installer questions
+----------------------------------------
+The installer will ask you for:
+- Promod mod folder name
+- server name
+- game password
+- rcon password
+- admin name
+- email
+- location
+- game port
+- startup map
+
+The installer will update:
+- server\start_script\server_args.psd1
+- server\mods\<your_mod>\server_match.cfg
+
+Step 11 - Start the server
+--------------------------
+Double-click:
+- server\start_match.bat
+
+This starts:
+- the COD4 match server
+- the HTTP fast download server
+
+Step 12 - Share the server address
+----------------------------------
+When the server starts, the launcher window will show a ready-to-send connect command and wait for you to copy it.
+You can copy and send that line directly to your friends.
+
+This package is mainly designed around IPv6. IPv4 can also work, but only if you already have a public IPv4 and the required port forwarding in place.
+If you prefer, you can also give out a stable DHCPv6/static-style IPv6 address instead of the temporary privacy IPv6.
+To find out if you even have ipv6, go to https://test-ipv6.com/ and check score at the bottom. A 0/10 means you do not currently have an ipv6. A green score of 9/10 or 10/10 means you have ipv6.
+
+Slightly Advanced :
+If you want the launcher to prefer a stable DHCPv6/static IPv6 for FastDL and the printed connect command, set Launcher -> PreferStableIpv6 = $true in server\start_script\server_args.psd1.
+If you plan on running server for longer than 7 days, prefer dhcpv6/ static assignment as temporary ipv6 addresses expire after 7 days.
+
+
+Important notes
+---------------
+- You can use any Promod folder name, as long as the same folder name exists in both Promod locations.
+- If you move to a future Promod version, copy that mod into both:
+  - server\mods\
+  - http_fast_download_server\cod4\mods\
+- Do not edit the startup scripts unless you know exactly what you are changing.
+- The normal editable launch values are in:
+  - server\start_script\server_args.psd1
+-This entire installation and start script bundle are , just as the name says, scripts only. They are plain powershell scripts and do not impact the performance of your cod4 server or any application. They run once and then they are done.
+
+If something is missing
+-----------------------
+If install_server.bat stops with an error, it usually means one of these is missing:
+- latest PowerShell 7.x
+- Python for the FastDL HTTP server
+- base COD4 server files in server\
+- COD4X server files in server\
+- the Promod folder in server\mods\
+- the same Promod folder in http_fast_download_server\cod4\mods\
+- server_match.cfg inside the selected mod folder
+
+If any issues or improvements, please open a issue or pull request on GitHub
+
+
+

@@ -1,0 +1,24 @@
+# Local backups and temp artifacts
+*.bak
+*.tmp
+*.temp
+*.log
+
+# Downloaded archives and extracted scratch files
+*.zip
+*.7z
+*.rar
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Editor and OS files
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+
+# Runtime PID markers if added later
+*.pid

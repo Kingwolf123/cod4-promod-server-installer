@@ -1,0 +1,7 @@
+Copy custom map folders into this directory.
+
+Each custom map should have its own folder, for example:
+- server\usermaps\mp_toujane_beta\
+
+If you use custom maps, also copy the same downloadable files to:
+- http_fast_download_server\cod4\usermaps\

@@ -1,0 +1,9 @@
+Copy the same Promod FPS 285 download files here for FastDL.
+
+This folder should contain the downloadable mod assets, for example:
+- fps_promod_285.iwd
+- mod.ff
+- z_c_r.iwd
+
+These should match the mod files you place in:
+- server\mods\fps_promod_285\

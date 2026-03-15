@@ -1,0 +1,9 @@
+Copy the Promod FPS 285 mod files into this folder.
+
+This folder should contain files such as:
+- fps_promod_285.iwd
+- mod.ff
+- z_c_r.iwd
+- server_match.cfg
+
+The included server_match.cfg is a template you can keep and let the installer update.

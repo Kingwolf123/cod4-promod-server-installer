@@ -1,0 +1,7 @@
+Copy the downloadable custom map files here for FastDL.
+
+If you add a custom map to:
+- server\usermaps\<mapname>\
+
+you should also add the matching downloadable files to:
+- http_fast_download_server\cod4\usermaps\<mapname>\
