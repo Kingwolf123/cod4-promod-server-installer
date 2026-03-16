@@ -170,6 +170,15 @@ function Get-PreferredIpv6Address {
             Expression = { $_.AddressState -ne "Preferred" }
             Ascending = $true
         }, @{
+            Expression = {
+                if ($PreferStableIpv6) {
+                    return $_.SuffixOrigin -ne "Random"
+                }
+
+                return $_.SuffixOrigin -ne "Dhcp"
+            }
+            Ascending = $true
+        }, @{
             Expression = { $_.PrefixLength }
             Ascending = $false
         }, @{

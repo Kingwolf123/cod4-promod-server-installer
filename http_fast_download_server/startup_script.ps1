@@ -53,14 +53,38 @@ function Get-PythonInvocation {
     return $null
 }
 
+function Get-DisplayHttpAddress {
+    param(
+        [string] $BindAddress,
+        [int] $BindPort
+    )
+
+    if ($BindAddress -match ":") {
+        return "http://[$BindAddress]:$BindPort/"
+    }
+
+    return "http://${BindAddress}:$BindPort/"
+}
+
 $pythonInvocation = Get-PythonInvocation
 if (-not $pythonInvocation) {
     throw "Python is not installed or not available in PATH. Run install_server.bat first, or install Python manually."
 }
 
-$address = "http://[$Bind]:$Port/"
-Write-Host "Starting IPv6 Python HTTP server..."
-Write-Host "Address: $address"
+$address = Get-DisplayHttpAddress -BindAddress $Bind -BindPort $Port
+if ($DualStack -and $Bind -eq "::") {
+    Write-Host "Starting dual-stack Python HTTP server..."
+    Write-Host "Bind: $address"
+    Write-Host "This listener accepts both IPv6 and IPv4 connections."
+}
+elseif ($Bind -match ":") {
+    Write-Host "Starting IPv6 Python HTTP server..."
+    Write-Host "Address: $address"
+}
+else {
+    Write-Host "Starting IPv4 Python HTTP server..."
+    Write-Host "Address: $address"
+}
 Write-Host ""
 Write-Host "DO NOT CLOSE THIS WINDOW OR TERMINAL."
 Write-Host "FASTDL WILL STOP WORKING IF YOU CLOSE IT."
