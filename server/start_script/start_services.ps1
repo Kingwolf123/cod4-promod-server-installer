@@ -55,15 +55,14 @@ function Open-InWindowsTerminal {
 
     $argumentList = @()
     if ($WindowId) {
-        $argumentList += @("-w", $WindowId)
+        $argumentList += @("--window", $WindowId)
     }
 
-    if ($NewTab) {
-        $argumentList += "new-tab"
-    }
+    # Be explicit for all launches instead of relying on wt's implicit default action.
+    $argumentList += "new-tab"
 
     if ($Title) {
-        $argumentList += @("--title", "`"$Title`"")
+        $argumentList += @("--title", $Title)
     }
 
     $pwshArgs = @()
@@ -82,6 +81,19 @@ function Open-InWindowsTerminal {
     ) + $pwshArgs
 
     Start-Process -FilePath (Get-WindowsTerminalPath) -ArgumentList $argumentList | Out-Null
+}
+
+function Focus-WindowsTerminalTab {
+    param(
+        [string] $WindowId = "0",
+
+        [Parameter(Mandatory = $true)]
+        [int] $TargetIndex
+    )
+
+    Start-Process `
+        -FilePath (Get-WindowsTerminalPath) `
+        -ArgumentList @("--window", $WindowId, "focus-tab", "--target", "$TargetIndex") | Out-Null
 }
 
 function Test-IsUsableGlobalIpv6 {
@@ -494,16 +506,25 @@ function Get-MatchStartupContext {
 
 function Get-ConnectCommandText {
     param(
-        [string] $ShareableIpv6,
+        [string] $ShareableAddress,
+        [ValidateSet("IPv4", "IPv6")]
+        [string] $AddressFamily = "IPv6",
         [string] $GamePort,
         [string] $GamePassword
     )
 
-    if ([string]::IsNullOrWhiteSpace($ShareableIpv6) -or [string]::IsNullOrWhiteSpace($GamePort)) {
+    if ([string]::IsNullOrWhiteSpace($ShareableAddress) -or [string]::IsNullOrWhiteSpace($GamePort)) {
         return ""
     }
 
-    $connectCommand = "connect [$ShareableIpv6]:$GamePort"
+    $connectAddress = if ($AddressFamily -eq "IPv6") {
+        "[$ShareableAddress]"
+    }
+    else {
+        $ShareableAddress
+    }
+
+    $connectCommand = "connect ${connectAddress}:$GamePort"
     if (-not [string]::IsNullOrWhiteSpace($GamePassword)) {
         $connectCommand += ";password $GamePassword"
     }
@@ -617,55 +638,49 @@ function Start-StatusTab {
     $shareableIpv6Address = Get-PreferredIpv6Address -PreferStableIpv6:$matchContext.PreferStableIpv6
     $shareableIpv6 = if ($shareableIpv6Address) { $shareableIpv6Address.IPAddress } else { "" }
     $commandText = Get-ConnectCommandText `
-        -ShareableIpv6 $shareableIpv6 `
+        -ShareableAddress $shareableIpv6 `
+        -AddressFamily "IPv6" `
+        -GamePort $matchContext.GamePort `
+        -GamePassword $matchContext.GamePassword
+    $lanIpv4Address = Get-PreferredIpv4Address
+    $lanIpv4 = if ($lanIpv4Address) { $lanIpv4Address.IPAddress } else { "" }
+    $ipv4CommandText = Get-ConnectCommandText `
+        -ShareableAddress $lanIpv4 `
+        -AddressFamily "IPv4" `
         -GamePort $matchContext.GamePort `
         -GamePassword $matchContext.GamePassword
     $ulaIpv6Address = Get-PreferredUlaIpv6Address
     $ulaIpv6 = if ($ulaIpv6Address) { $ulaIpv6Address.IPAddress } else { "" }
     $ulaCommandText = Get-ConnectCommandText `
-        -ShareableIpv6 $ulaIpv6 `
+        -ShareableAddress $ulaIpv6 `
+        -AddressFamily "IPv6" `
         -GamePort $matchContext.GamePort `
         -GamePassword $matchContext.GamePassword
-    $fastDlEndpoint = Get-PreferredFastDownloadEndpoint `
-        -PreferStableIpv6:$matchContext.PreferStableIpv6 `
-        -NoGlobalIpv6FastDlPreference $matchContext.NoGlobalIpv6FastDlPreference
-    $fastDlUrl = if ($fastDlEndpoint) {
-        Get-FastDownloadUrl -Endpoint $fastDlEndpoint -FastDlPort 8000 -ContentPath "cod4/"
-    }
-    else {
-        ""
-    }
 
     Write-Host ""
     Write-Host "SHARE THIS WITH PLAYERS:"
     if ([string]::IsNullOrWhiteSpace($commandText)) {
         Write-Host "NO PUBLIC IPV6 WAS DETECTED."
         Write-Host "The server still started."
-        if ($fastDlEndpoint -and $fastDlEndpoint.EndpointType -eq "LanIpv4") {
-            Write-Host "FastDL URL was updated automatically to LAN IPv4:"
-            Write-Host $fastDlUrl
-        }
-        elseif ($fastDlEndpoint -and $fastDlEndpoint.EndpointType -eq "UlaIpv6") {
-            Write-Host "FastDL URL was updated automatically to ULA IPv6:"
-            Write-Host $fastDlUrl
-        }
-        else {
-            Write-Host "FastDL public URL was not changed, so any manual IPv4 or LAN URL you already set can still be used."
-        }
-
-        if ($fastDlEndpoint -and $fastDlEndpoint.EndpointType -eq "LanIpv4") {
+        if (-not [string]::IsNullOrWhiteSpace($ipv4CommandText)) {
+            Write-Host "LAN IPv4 connect command:"
+            Write-Host $ipv4CommandText
             Write-Host "That IPv4 is local/private, so remote players still need your public IPv4 and port forwarding."
         }
-        elseif ($fastDlEndpoint -and $fastDlEndpoint.EndpointType -eq "UlaIpv6") {
-            Write-Host "That ULA IPv6 is LAN-only, so internet players cannot use it."
-        }
 
-        if ([string]::IsNullOrWhiteSpace($ulaCommandText)) {
-            Write-Host "No ULA IPv6 address was detected for LAN-only sharing."
-        }
-        else {
-            Write-Host "For same-LAN players, you can try this ULA connect command:"
+        if (-not [string]::IsNullOrWhiteSpace($ulaCommandText)) {
+            $ulaLabel = if (-not [string]::IsNullOrWhiteSpace($ipv4CommandText)) {
+                "For same-LAN players, you can also try this ULA connect command:"
+            }
+            else {
+                "For same-LAN players, you can try this ULA connect command:"
+            }
+
+            Write-Host $ulaLabel
             Write-Host $ulaCommandText
+        }
+        elseif ([string]::IsNullOrWhiteSpace($ipv4CommandText)) {
+            Write-Host "No ULA IPv6 address was detected for LAN-only sharing."
         }
     }
     else {
@@ -691,8 +706,7 @@ function Start-GameServer {
             -Arguments @("-Action", "Game", "-InTerminal") `
             -NewTab `
             -WindowId 0 `
-            -Title "COD4_MATCH_SERVER" `
-            -KeepOpen
+            -Title "COD4_MATCH_SERVER"
         return
     }
 
@@ -726,10 +740,9 @@ function Start-MatchServer {
         Open-InWindowsTerminal `
             -WorkingDirectory $serverRoot `
             -Arguments @("-Action", "Game", "-InTerminal") `
-            -Title "COD4_MATCH_SERVER" `
-            -KeepOpen
+            -Title "COD4_MATCH_SERVER"
 
-        Start-Sleep -Milliseconds 300
+        Start-Sleep -Milliseconds 500
 
         Open-InWindowsTerminal `
             -WorkingDirectory $httpRoot `
@@ -739,6 +752,8 @@ function Start-MatchServer {
             -Title "FASTDL_HTTP_SERVER" `
             -KeepOpen
 
+        Start-Sleep -Milliseconds 250
+
         Open-InWindowsTerminal `
             -WorkingDirectory $serverRoot `
             -Arguments @("-Action", "Status", "-InTerminal") `
@@ -746,6 +761,9 @@ function Start-MatchServer {
             -WindowId 0 `
             -Title "CONNECT_COMMAND" `
             -KeepOpen
+
+        Start-Sleep -Milliseconds 250
+        Focus-WindowsTerminalTab -WindowId 0 -TargetIndex 2
         return
     }
 
@@ -766,8 +784,9 @@ function Start-MatchServer {
         -Arguments @("-Action", "Game", "-InTerminal") `
         -NewTab `
         -WindowId 0 `
-        -Title "COD4_MATCH_SERVER" `
-        -KeepOpen
+        -Title "COD4_MATCH_SERVER"
+
+    Start-Sleep -Milliseconds 250
 
     Open-InWindowsTerminal `
         -WorkingDirectory $httpRoot `
@@ -777,6 +796,8 @@ function Start-MatchServer {
         -Title "FASTDL_HTTP_SERVER" `
         -KeepOpen
 
+    Start-Sleep -Milliseconds 250
+
     Open-InWindowsTerminal `
         -WorkingDirectory $serverRoot `
         -Arguments @("-Action", "Status", "-InTerminal") `
@@ -784,6 +805,9 @@ function Start-MatchServer {
         -WindowId 0 `
         -Title "CONNECT_COMMAND" `
         -KeepOpen
+
+    Start-Sleep -Milliseconds 250
+    Focus-WindowsTerminalTab -WindowId 0 -TargetIndex 3
 
     exit 0
 }
