@@ -1,7 +1,7 @@
 # COD4 Promod Server Installer for Windows (COD4X + FastDL)
 # Setup a promod server in 2 minutes.
 
-How to use ( quick ): 
+## How to use ( quick ): 
 
 - Download the cod4_promod_server.zip from the latest release 
 - run install server
@@ -9,27 +9,19 @@ How to use ( quick ):
 - Go to server/start_match to start.
 - Thats it. For Further details read instructions in Beginner_Guide.txt and below. Although all steps are covered in the interative install_server.bat process. You shoudnt need anything else to get started.  
 
-It is designed to help people who are searching for things like:
-- how to host a COD4 Promod server on Windows
-- how to install a COD4X server for Call of Duty 4
-- how to set up FastDL for a COD4 server
-- how to run a Promod match server with a shareable `connect` command
-- Meant to be extensible in its design for anyone wanting to do anything other, adding parameters etc. Designed to be general purpose, standard, modular and extensible in terms of script design. Can host any other mod / game mode just as well 
 
 
 This repository is a script-and-package layer for local distribution and deployment of a COD4 Promod server setup on Windows.
 The project provides the **installer scripts, startup scripts, FastDL launcher, folder structure, and editable config flow** needed to get a COD4 Promod server running with **COD4X**, **Python FastDL**, and **Windows Terminal**.
 
+It is designed to help people who are searching for things like:
+- how to host a COD4 Promod /match server on Windows
+- how to install a COD4X server for Call of Duty 4
+- how to set up FastDL for a COD4 server
+- Meant to be extensible in its design for anyone wanting to do anything other, adding parameters etc. Designed to be general purpose, standard, modular and extensible in terms of script design. Can host any other mod / game mode just as well 
+
 This repository does **not** distribute the base game, COD4X binaries for redistribution, or Promod assets. It is a automation layer.
 
-## COD4X and Promod Links
-
-If you found this repository while looking for **COD4X** or **Promod** itself, use these official project links for downloading or reference:
-
-- **COD4X server project:** [callofduty4x/CoD4x_Server on GitHub](https://github.com/callofduty4x/CoD4x_Server)
-- **COD4X forums / project site:** [cod4x.ovh](https://cod4x.ovh)
-- **Promod official download page:** [promod.github.io](https://promod.github.io/)
-- **Promod source code:** [promod/promod4 on GitHub](https://github.com/promod/promod4)
  .
 
 ## Who This Project Is For
@@ -256,3 +248,11 @@ If you make improvements to the installer or startup flow or find any bugs, keep
 - practical Windows setup leading to simplicity.
 - focused on design around non technical users
 
+## COD4X and Promod Links
+
+If you found this repository while looking for **COD4X** or **Promod** itself, use these official project links for downloading or reference:
+
+- **COD4X server project:** [callofduty4x/CoD4x_Server on GitHub](https://github.com/callofduty4x/CoD4x_Server)
+- **COD4X forums / project site:** [cod4x.ovh](https://cod4x.ovh)
+- **Promod official download page:** [promod.github.io](https://promod.github.io/)
+- **Promod source code:** [promod/promod4 on GitHub](https://github.com/promod/promod4)
