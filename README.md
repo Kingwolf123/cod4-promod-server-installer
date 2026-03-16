@@ -149,7 +149,7 @@ The FastDL server launcher.
 It:
 
 - locates a usable Python runtime
-- starts the built-in Python HTTP server bound to IPv6. If no GUA ipv6 is detected, it falls back to bind dualstack. You still need to manually edit your www_baseURL in server_match.cfg with your ipv4 in this single specific case .
+- starts the built-in Python HTTP server bound to IPv6. If no GUA IPv6 is detected, it falls back to dual-stack and rewrites `sv_wwwBaseURL` to the preferred IPv4 which is typically ur LAN ipv4.
 
 ## Prerequisite and Requirements List
 

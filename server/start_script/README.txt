@@ -20,6 +20,7 @@ IPv6 preference setting
 - `PreferStableIpv6 = $true`
   Prefers a stable DHCPv6 or static IPv6.
 - This setting does not rewrite your actual `+set net_ip6` launch arg. It only changes the address-selection logic used by the launcher output and FastDL URL updater.
+- If no usable global IPv6 is found, the launcher falls back to a available preferred IPv4 for `sv_wwwBaseURL` and starts the FastDL HTTP server in dual-stack mode.
 
 Temporary IPv6 note
 -------------------
