@@ -496,7 +496,7 @@ function Wait-ForPromodFiles {
     param([string] $ModFolder)
 
     Write-Step "Promod files"
-    Write-Host "Now copy the contents of your Promod mod folder into both of the following folders below."
+    Write-Host "Now copy the Promod/ mod folder into both of the following folders below."
     Write-Host "Use the same folder name in both places: $ModFolder"
     Write-Host ""
     Write-Host "1. Game server mod folder:"
@@ -505,9 +505,12 @@ function Wait-ForPromodFiles {
     Write-Host "2. FastDL mod folder:"
     Write-Host "- http_fast_download_server\cod4\mods\$ModFolder\"
     Write-Host ""
-    Write-Host "Important:"
-    Write-Host "- server_match.cfg must be inside server\mods\$ModFolder\"
-    Write-Host "- Copy the same Promod files to both folders"
+    Write-Host "Important TODO:"
+    Write-Host "Copy given minimal server_match.cfg from server/mods/fps_promod_285 folder into your mod folder that you just added . This is recommended to use for any standard promod like pml220 or fps_promod_xxx. "
+    Write-Host "- server_match.cfg must be inside server\mods\$ModFolder\ but not in the http_fast_download directory. People dont want to download ur server cfg!"
+    Write-Host ""
+    Write-Host "Important Notes"
+    Write-Host "If your using your own cfg and mod, ur responsible for that. Make sure fast downloading commands are present and enabled in your cfg."
     Write-Host ""
     Write-Host "Read BEGINNER_GUIDE.txt if you need the exact file list."
     Read-Host "Press Enter after you have copied the Promod files into both folders"
@@ -518,7 +521,7 @@ Copy-BaseGameFiles
 Install-Cod4xServerFiles
 
 Write-Step "Step 3 : Copy Promod or Mod files and enter Mod name"
-Write-Host "Please write the exact folder name of  Promod/mod you want the installation to use. This is to identify the mod you want to use  e.g fps_promod_285"
+Write-Host "Please write the exact folder name of  your Promod/mod folder   e.g fps_promod_285 OR pml220 "
 Write-Host ""
 $modFolder = Read-DefaultValue -Prompt "Mod directory name: " -DefaultValue $config.DefaultModFolder
 Assert-ValidModFolderName -Name $modFolder
