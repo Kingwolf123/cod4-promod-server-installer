@@ -446,6 +446,139 @@ function Ensure-DirectoryExists {
     }
 }
 
+function Test-IsLikelyServerModAssetFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.IO.FileInfo] $File,
+
+        [Parameter(Mandatory = $true)]
+        [string] $ServerModPath
+    )
+
+    if ($File.Name -match '^PUT_PROMOD.*_HERE\.txt$') {
+        return $false
+    }
+
+    if ($File.Name -ieq "server_match.cfg") {
+        return $false
+    }
+
+    $relativePath = $File.FullName.Substring($ServerModPath.Length).TrimStart('\')
+    $isRootLevelFile = ($relativePath -notlike "*\*")
+    $extension = $File.Extension.ToLowerInvariant()
+    $junkExtensions = @(
+        ".txt", ".md", ".zip", ".rar", ".7z", ".bak", ".old", ".tmp",
+        ".pdf", ".doc", ".docx", ".log", ".cfg",
+        ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tga", ".psd",
+        ".mp3", ".wav", ".ogg", ".mp4", ".avi", ".mkv"
+    )
+    if ($extension -in $junkExtensions) {
+        return $false
+    }
+
+    $knownModExtensions = @(
+        ".iwd", ".ff", ".gsc", ".csc", ".menu", ".csv", ".str", ".atr",
+        ".vision", ".sun", ".weapon", ".shader", ".hlsl"
+    )
+    if ($extension -in $knownModExtensions) {
+        return $true
+    }
+
+    # Allow uncommon custom mod assets only at the mod root.
+    return $isRootLevelFile
+}
+
+function Get-Step3ValidationErrors {
+    param(
+        [string] $ModFolder,
+        [string] $ServerModPath,
+        [string] $HttpModPath
+    )
+
+    $validationMessages = @()
+    $requiredPaths = @(
+        @{
+            Path = (Join-Path $serverRoot "cod4x18_dedrun.exe")
+            HelpText = "Copy your COD4X dedicated server files into the server folder first."
+        },
+        @{
+            Path = (Join-Path $serverRoot "main")
+            HelpText = "Copy the base Call of Duty 4 game files into server\\main first."
+        },
+        @{
+            Path = (Join-Path $serverRoot "zone")
+            HelpText = "Copy the base Call of Duty 4 game files into server\\zone first."
+        },
+        @{
+            Path = (Join-Path $httpRoot "cod4")
+            HelpText = "The http_fast_download_server\\cod4 folder is missing."
+        },
+        @{
+            Path = (Join-Path $serverRoot "start_script\\server_args.psd1")
+            HelpText = "The startup scripts are missing from server\\start_script."
+        }
+    )
+
+    foreach ($requiredPath in $requiredPaths) {
+        if (-not (Test-Path -LiteralPath $requiredPath.Path)) {
+            $validationMessages += "$($requiredPath.HelpText) Missing path: $($requiredPath.Path)"
+        }
+    }
+
+    $serverMatchCfg = Join-Path $ServerModPath "server_match.cfg"
+
+    if (-not (Test-Path -LiteralPath $ServerModPath)) {
+        $validationMessages += "Expected the Promod game server folder at server\\mods\\$ModFolder\\. Copy your Promod files there before running the installer."
+    }
+    else {
+        if (-not (Test-Path -LiteralPath $serverMatchCfg)) {
+            $validationMessages += "server_match.cfg is missing from server\\mods\\$ModFolder\\. Copy or create it there first."
+        }
+
+        $serverModFiles = @(Get-ChildItem -LiteralPath $ServerModPath -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
+            Test-IsLikelyServerModAssetFile -File $_ -ServerModPath $ServerModPath
+        })
+        if ($serverModFiles.Count -eq 0) {
+            $validationMessages += "Expected actual mod files in server\\mods\\$ModFolder\\. The folder currently only contains placeholders or non-mod files."
+        }
+
+        $serverDemoFolders = @(Get-ChildItem -LiteralPath $ServerModPath -Recurse -Directory -ErrorAction SilentlyContinue | Where-Object {
+            $_.Name -ieq "demo" -or $_.Name -ieq "demos"
+        })
+        if ($serverDemoFolders.Count -gt 0) {
+            $validationMessages += "Remove demo folders from server\\mods\\$ModFolder\\ before continuing."
+        }
+    }
+
+    if (-not (Test-Path -LiteralPath $HttpModPath)) {
+        $validationMessages += "Expected the FastDL Promod folder at http_fast_download_server\\cod4\\mods\\$ModFolder\\. Copy the same Promod files there before running the installer."
+    }
+    else {
+        $fastDlAssets = @(Get-ChildItem -LiteralPath $HttpModPath -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
+            $_.Extension -in @(".iwd", ".ff")
+        })
+        if ($fastDlAssets.Count -eq 0) {
+            $validationMessages += "Expected downloadable mod assets (.iwd or .ff) in http_fast_download_server\\cod4\\mods\\$ModFolder\\."
+        }
+
+        $fastDlCfgFiles = @(Get-ChildItem -LiteralPath $HttpModPath -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
+            $_.Extension -eq ".cfg"
+        })
+        if ($fastDlCfgFiles.Count -gt 0) {
+            $validationMessages += "Remove .cfg files from http_fast_download_server\\cod4\\mods\\$ModFolder\\. FastDL should not contain server cfg files."
+        }
+
+        $fastDlDemoFolders = @(Get-ChildItem -LiteralPath $HttpModPath -Recurse -Directory -ErrorAction SilentlyContinue | Where-Object {
+            $_.Name -ieq "demo" -or $_.Name -ieq "demos"
+        })
+        if ($fastDlDemoFolders.Count -gt 0) {
+            $validationMessages += "Remove demo folders from http_fast_download_server\\cod4\\mods\\$ModFolder\\ before continuing."
+        }
+    }
+
+    return @($validationMessages)
+}
+
 function Assert-ValidModFolderName {
     param([string] $Name)
 
@@ -528,29 +661,51 @@ Install-Cod4xServerFiles
 Write-Step "Step 3 : Copy Promod or Mod files and enter Mod name"
 Write-Host "Please write the exact folder name of  your Promod/mod folder   e.g fps_promod_285 OR pml220 "
 Write-Host ""
+$serverModsRoot = Join-Path $serverRoot "mods"
+$httpModsRoot = Join-Path $httpRoot "cod4\\mods"
+Ensure-DirectoryExists -Path $serverModsRoot
+Ensure-DirectoryExists -Path $httpModsRoot
 $modFolder = Read-DefaultValue -Prompt "Mod directory name: " -DefaultValue $config.DefaultModFolder
 Assert-ValidModFolderName -Name $modFolder
-$serverModPath = Join-Path $serverRoot ("mods\\" + $modFolder)
-$httpModPath = Join-Path $httpRoot ("cod4\\mods\\" + $modFolder)
-Ensure-DirectoryExists -Path $serverModPath
-Ensure-DirectoryExists -Path $httpModPath
-Wait-ForPromodFiles -ModFolder $modFolder
 
-Write-Step "Checking required folders and files"
-Assert-PathExists -Path (Join-Path $serverRoot "cod4x18_dedrun.exe") -HelpText "Copy your COD4X dedicated server files into the server folder first."
-Assert-PathExists -Path (Join-Path $serverRoot "main") -HelpText "Copy the base Call of Duty 4 game files into server\main first."
-Assert-PathExists -Path (Join-Path $serverRoot "zone") -HelpText "Copy the base Call of Duty 4 game files into server\zone first."
-Assert-PathExists -Path (Join-Path $httpRoot "cod4") -HelpText "The http_fast_download_server\cod4 folder is missing."
-Assert-PathExists -Path (Join-Path $serverRoot "start_script\\server_args.psd1") -HelpText "The startup scripts are missing from server\start_script."
+$step3ValidationPassed = $false
+while (-not $step3ValidationPassed) {
+    $serverModPath = Join-Path $serverModsRoot $modFolder
+    $httpModPath = Join-Path $httpModsRoot $modFolder
 
-$serverModPath = Join-Path $serverRoot ("mods\\" + $modFolder)
-$httpModPath = Join-Path $httpRoot ("cod4\\mods\\" + $modFolder)
+    Wait-ForPromodFiles -ModFolder $modFolder
+
+    while ($true) {
+        Write-Step "Checking required folders and files"
+        $step3ValidationMessages = @(Get-Step3ValidationErrors `
+            -ModFolder $modFolder `
+            -ServerModPath $serverModPath `
+            -HttpModPath $httpModPath)
+        if ($step3ValidationMessages.Count -eq 0) {
+            $step3ValidationPassed = $true
+            break
+        }
+
+        Write-Step "Promod validation failed"
+        foreach ($validationMessage in $step3ValidationMessages) {
+            Write-Host "- $validationMessage"
+        }
+        Write-Host ""
+
+        if (Read-YesNo -Prompt "Do you want to change the mod directory name?" -DefaultYes $false) {
+            Write-Host ""
+            $modFolder = Read-DefaultValue -Prompt "Mod directory name: " -DefaultValue $modFolder
+            Assert-ValidModFolderName -Name $modFolder
+            break
+        }
+
+        Read-Host "Fix the items above, then press Enter to recheck the prerequisites and Promod/mod files"
+    }
+}
+
+$serverModPath = Join-Path $serverModsRoot $modFolder
+$httpModPath = Join-Path $httpModsRoot $modFolder
 $serverMatchCfg = Join-Path $serverModPath "server_match.cfg"
-
-Write-Step "Validating Promod files"
-Assert-PathExists -Path $serverModPath -HelpText "Expected the Promod game server folder at server\mods\$modFolder\. Copy your Promod files there before running the installer."
-Assert-PathExists -Path $httpModPath -HelpText "Expected the FastDL Promod folder at http_fast_download_server\cod4\mods\$modFolder\. Copy the same Promod files there before running the installer."
-Assert-PathExists -Path $serverMatchCfg -HelpText "server_match.cfg is missing from server\mods\$modFolder\. Copy or create it there first."
 
 Write-Step "Server setup"
 $serverName = Read-DefaultValue -Prompt "Server name" -DefaultValue $config.DefaultServerName
