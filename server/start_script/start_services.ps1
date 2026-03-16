@@ -123,7 +123,7 @@ function Get-PreferredIpv6Address {
         [bool] $PreferStableIpv6 = $false
     )
 
-    $addresses = Get-NetIPAddress -AddressFamily IPv6 |
+    $preferredAddresses = Get-NetIPAddress -AddressFamily IPv6 |
         Where-Object {
             if ($PreferStableIpv6) {
                 Test-IsUsableGlobalStableIpv6 $_
@@ -152,7 +152,32 @@ function Get-PreferredIpv6Address {
             Ascending = $false
         }
 
-    return $addresses | Select-Object -First 1
+    $selectedPreferredAddress = $preferredAddresses | Select-Object -First 1
+    if ($selectedPreferredAddress) {
+        return $selectedPreferredAddress
+    }
+
+    $fallbackAddresses = Get-NetIPAddress -AddressFamily IPv6 |
+        Where-Object {
+            if ($PreferStableIpv6) {
+                Test-IsUsableGlobalTemporaryIpv6 $_
+            }
+            else {
+                Test-IsUsableGlobalStableIpv6 $_
+            }
+        } |
+        Sort-Object -Property @{
+            Expression = { $_.AddressState -ne "Preferred" }
+            Ascending = $true
+        }, @{
+            Expression = { $_.PrefixLength }
+            Ascending = $false
+        }, @{
+            Expression = { $_.ValidLifetime.TotalSeconds }
+            Ascending = $false
+        }
+
+    return $fallbackAddresses | Select-Object -First 1
 }
 
 function Test-IsUsableUlaIpv6 {
@@ -284,7 +309,10 @@ function Get-PreferredIpv4Address {
 
 function Get-PreferredFastDownloadEndpoint {
     param(
-        [bool] $PreferStableIpv6 = $false
+        [bool] $PreferStableIpv6 = $false,
+
+        [ValidateSet("LanIpv4", "UlaIpv6")]
+        [string] $NoGlobalIpv6FastDlPreference = "LanIpv4"
     )
 
     $selectedIpv6 = Get-PreferredIpv6Address -PreferStableIpv6:$PreferStableIpv6
@@ -292,16 +320,40 @@ function Get-PreferredFastDownloadEndpoint {
         return [pscustomobject]@{
             Address       = $selectedIpv6.IPAddress
             AddressFamily = "IPv6"
+            EndpointType  = "GlobalIpv6"
             UseDualStack  = $false
         }
     }
 
-    $selectedIpv4 = Get-PreferredIpv4Address
-    if ($selectedIpv4) {
-        return [pscustomobject]@{
-            Address       = $selectedIpv4.IPAddress
-            AddressFamily = "IPv4"
-            UseDualStack  = $true
+    $fallbackOrder = if ($NoGlobalIpv6FastDlPreference -eq "UlaIpv6") {
+        @("UlaIpv6", "LanIpv4")
+    }
+    else {
+        @("LanIpv4", "UlaIpv6")
+    }
+
+    foreach ($fallbackType in $fallbackOrder) {
+        if ($fallbackType -eq "LanIpv4") {
+            $selectedIpv4 = Get-PreferredIpv4Address
+            if ($selectedIpv4) {
+                return [pscustomobject]@{
+                    Address       = $selectedIpv4.IPAddress
+                    AddressFamily = "IPv4"
+                    EndpointType  = "LanIpv4"
+                    UseDualStack  = $true
+                }
+            }
+        }
+        else {
+            $selectedUlaIpv6 = Get-PreferredUlaIpv6Address
+            if ($selectedUlaIpv6) {
+                return [pscustomobject]@{
+                    Address       = $selectedUlaIpv6.IPAddress
+                    AddressFamily = "IPv6"
+                    EndpointType  = "UlaIpv6"
+                    UseDualStack  = $true
+                }
+            }
         }
     }
 
@@ -396,8 +448,17 @@ function Get-MatchStartupContext {
     $serverArgs = @($serverArgsConfig.MatchServer)
     $launcherSettings = Get-LauncherSettings -ServerArgsConfig $serverArgsConfig
     $preferStableIpv6 = $false
+    $noGlobalIpv6FastDlPreference = "LanIpv4"
     if ($launcherSettings.ContainsKey("PreferStableIpv6")) {
         $preferStableIpv6 = [bool] $launcherSettings.PreferStableIpv6
+    }
+    if ($launcherSettings.ContainsKey("NoGlobalIpv6FastDlPreference")) {
+        $configuredPreference = [string] $launcherSettings.NoGlobalIpv6FastDlPreference
+        if ($configuredPreference -notin @("LanIpv4", "UlaIpv6")) {
+            throw "Launcher.NoGlobalIpv6FastDlPreference must be LanIpv4 or UlaIpv6."
+        }
+
+        $noGlobalIpv6FastDlPreference = $configuredPreference
     }
 
     $modGame = Get-ServerArgValue -ServerArgs $serverArgs -Name "fs_game"
@@ -414,6 +475,7 @@ function Get-MatchStartupContext {
         ModConfig        = $modConfig
         GamePassword     = $gamePassword
         GamePort         = $gamePort
+        NoGlobalIpv6FastDlPreference = $noGlobalIpv6FastDlPreference
         PreferStableIpv6 = $preferStableIpv6
         ServerArgs       = $serverArgs
         ServerArgsConfig = $serverArgsConfig
@@ -450,14 +512,19 @@ function Update-FastDownloadUrl {
 
         [string] $ContentPath = "cod4/",
 
-        [bool] $PreferStableIpv6 = $false
+        [bool] $PreferStableIpv6 = $false,
+
+        [ValidateSet("LanIpv4", "UlaIpv6")]
+        [string] $NoGlobalIpv6FastDlPreference = "LanIpv4"
     )
 
     if (-not (Test-Path -LiteralPath $ConfigPath)) {
         throw "Config file not found: $ConfigPath"
     }
 
-    $selectedEndpoint = Get-PreferredFastDownloadEndpoint -PreferStableIpv6:$PreferStableIpv6
+    $selectedEndpoint = Get-PreferredFastDownloadEndpoint `
+        -PreferStableIpv6:$PreferStableIpv6 `
+        -NoGlobalIpv6FastDlPreference $NoGlobalIpv6FastDlPreference
     if (-not $selectedEndpoint) {
         return $null
     }
@@ -550,7 +617,9 @@ function Start-StatusTab {
         -ShareableIpv6 $ulaIpv6 `
         -GamePort $matchContext.GamePort `
         -GamePassword $matchContext.GamePassword
-    $fastDlEndpoint = Get-PreferredFastDownloadEndpoint -PreferStableIpv6:$matchContext.PreferStableIpv6
+    $fastDlEndpoint = Get-PreferredFastDownloadEndpoint `
+        -PreferStableIpv6:$matchContext.PreferStableIpv6 `
+        -NoGlobalIpv6FastDlPreference $matchContext.NoGlobalIpv6FastDlPreference
     $fastDlUrl = if ($fastDlEndpoint) {
         Get-FastDownloadUrl -Endpoint $fastDlEndpoint -FastDlPort 8000 -ContentPath "cod4/"
     }
@@ -563,16 +632,23 @@ function Start-StatusTab {
     if ([string]::IsNullOrWhiteSpace($commandText)) {
         Write-Host "NO PUBLIC IPV6 WAS DETECTED."
         Write-Host "The server still started."
-        if ($fastDlEndpoint -and $fastDlEndpoint.AddressFamily -eq "IPv4") {
+        if ($fastDlEndpoint -and $fastDlEndpoint.EndpointType -eq "LanIpv4") {
             Write-Host "FastDL URL was updated automatically to LAN IPv4:"
+            Write-Host $fastDlUrl
+        }
+        elseif ($fastDlEndpoint -and $fastDlEndpoint.EndpointType -eq "UlaIpv6") {
+            Write-Host "FastDL URL was updated automatically to ULA IPv6:"
             Write-Host $fastDlUrl
         }
         else {
             Write-Host "FastDL public URL was not changed, so any manual IPv4 or LAN URL you already set can still be used."
         }
 
-        if ($fastDlEndpoint -and $fastDlEndpoint.AddressFamily -eq "IPv4") {
+        if ($fastDlEndpoint -and $fastDlEndpoint.EndpointType -eq "LanIpv4") {
             Write-Host "That IPv4 is local/private, so remote players still need your public IPv4 and port forwarding."
+        }
+        elseif ($fastDlEndpoint -and $fastDlEndpoint.EndpointType -eq "UlaIpv6") {
+            Write-Host "That ULA IPv6 is LAN-only, so internet players cannot use it."
         }
 
         if ([string]::IsNullOrWhiteSpace($ulaCommandText)) {
@@ -627,7 +703,12 @@ function Start-MatchServer {
 
     if (-not $TerminalHosted) {
         Set-Location -LiteralPath $serverRoot
-        $fastDlEndpoint = Update-FastDownloadUrl -ConfigPath $matchContext.ModConfig -FastDlPort 8000 -ContentPath "cod4/" -PreferStableIpv6:$matchContext.PreferStableIpv6
+        $fastDlEndpoint = Update-FastDownloadUrl `
+            -ConfigPath $matchContext.ModConfig `
+            -FastDlPort 8000 `
+            -ContentPath "cod4/" `
+            -PreferStableIpv6:$matchContext.PreferStableIpv6 `
+            -NoGlobalIpv6FastDlPreference $matchContext.NoGlobalIpv6FastDlPreference
         $httpArguments = @("-Action", "Http", "-InTerminal", "-Port", "8000", "-Bind", "::")
         if (-not $fastDlEndpoint -or $fastDlEndpoint.UseDualStack) {
             $httpArguments += "-DualStack"
@@ -660,7 +741,12 @@ function Start-MatchServer {
     }
 
     Set-Location -LiteralPath $serverRoot
-    $fastDlEndpoint = Update-FastDownloadUrl -ConfigPath $matchContext.ModConfig -FastDlPort 8000 -ContentPath "cod4/" -PreferStableIpv6:$matchContext.PreferStableIpv6
+    $fastDlEndpoint = Update-FastDownloadUrl `
+        -ConfigPath $matchContext.ModConfig `
+        -FastDlPort 8000 `
+        -ContentPath "cod4/" `
+        -PreferStableIpv6:$matchContext.PreferStableIpv6 `
+        -NoGlobalIpv6FastDlPreference $matchContext.NoGlobalIpv6FastDlPreference
     $httpArguments = @("-Action", "Http", "-InTerminal", "-Port", "8000", "-Bind", "::")
     if (-not $fastDlEndpoint -or $fastDlEndpoint.UseDualStack) {
         $httpArguments += "-DualStack"

@@ -19,8 +19,13 @@ IPv6 preference setting
   Uses a temporary/privacy IPv6.
 - `PreferStableIpv6 = $true`
   Prefers a stable DHCPv6 or static IPv6.
+- If the preferred global IPv6 type is unavailable, the launcher falls back to another usable global IPv6 before using the no-global-IPv6 FastDL fallback.
 - This setting does not rewrite your actual `+set net_ip6` launch arg. It only changes the address-selection logic used by the launcher output and FastDL URL updater.
-- If no usable global IPv6 is found, the launcher falls back to a available preferred IPv4 for `sv_wwwBaseURL` and starts the FastDL HTTP server in dual-stack mode.
+- `NoGlobalIpv6FastDlPreference = "LanIpv4"`
+  When no usable global IPv6 exists, prefer LAN/private IPv4 for `sv_wwwBaseURL`, then fall back to ULA IPv6.
+- `NoGlobalIpv6FastDlPreference = "UlaIpv6"`
+  When no usable global IPv6 exists, prefer ULA IPv6 for `sv_wwwBaseURL`, then fall back to LAN/private IPv4.
+- In both fallback modes, the FastDL HTTP server still starts in dual-stack mode.
 
 Temporary IPv6 note
 -------------------

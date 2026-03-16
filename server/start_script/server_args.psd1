@@ -8,6 +8,11 @@
         # $false = use a temporary/privacy IPv6 for FastDL and the printed connect command.
         # $true  = prefer a stable DHCPv6/static IPv6 instead.
         PreferStableIpv6 = $false
+
+        # Used only when no usable global IPv6 is available for FastDL.
+        # "LanIpv4" = prefer LAN/private IPv4 first, then ULA IPv6.
+        # "UlaIpv6" = prefer ULA IPv6 first, then LAN/private IPv4.
+        NoGlobalIpv6FastDlPreference = "LanIpv4"
     }
 
     MatchServer = @(
