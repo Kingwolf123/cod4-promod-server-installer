@@ -22,10 +22,6 @@ function Get-CommandSourceIfAvailable {
     return $null
 }
 
-function Get-WindowsAppsPath {
-    return (Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps")
-}
-
 function Get-PythonExecutablePaths {
     $candidates = @()
     $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
@@ -63,46 +59,11 @@ function Get-PythonExecutablePaths {
     return $candidates | Select-Object -Unique
 }
 
-function Get-PyCommandPath {
-    $candidates = @()
-    $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
-
-    if ($env:WINDIR) {
-        $candidates += (Join-Path $env:WINDIR "py.exe")
-    }
-    if ($env:LOCALAPPDATA) {
-        $candidates += (Join-Path $env:LOCALAPPDATA "Programs\Python\Launcher\py.exe")
-    }
-    if ($env:ProgramFiles) {
-        $candidates += (Join-Path $env:ProgramFiles "Python Launcher\py.exe")
-    }
-    if ($programFilesX86) {
-        $candidates += (Join-Path $programFilesX86 "Python Launcher\py.exe")
-    }
-    $candidates += (Join-Path (Get-WindowsAppsPath) "py.exe")
-
-    foreach ($candidate in $candidates | Select-Object -Unique) {
-        if (Test-Path -LiteralPath $candidate) {
-            return $candidate
-        }
-    }
-
-    return (Get-CommandSourceIfAvailable -Name "py")
-}
-
 function Get-PythonInvocation {
     foreach ($pythonCommand in Get-PythonExecutablePaths) {
         return [pscustomobject]@{
             FilePath = $pythonCommand
             Arguments = @()
-        }
-    }
-
-    $pyCommand = Get-PyCommandPath
-    if ($pyCommand) {
-        return [pscustomobject]@{
-            FilePath = $pyCommand
-            Arguments = @("-V:3")
         }
     }
 
@@ -124,7 +85,7 @@ function Get-DisplayHttpAddress {
 
 $pythonInvocation = Get-PythonInvocation
 if (-not $pythonInvocation) {
-    throw "Python is not installed or not available in PATH. Run install_server.bat first, or install Python manually."
+    throw "Python is not installed or could not be located. Run install_server.bat first, or install Python manually."
 }
 
 $address = Get-DisplayHttpAddress -BindAddress $Bind -BindPort $Port

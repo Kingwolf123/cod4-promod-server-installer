@@ -297,64 +297,43 @@ function Get-PythonExecutablePaths {
     return $candidates | Select-Object -Unique
 }
 
-function Get-PyCommandCandidates {
+function Get-PythonManagerCommandCandidates {
     $candidates = @()
-    $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
 
-    $windowsAppsPy = Join-Path (Get-WindowsAppsPath) "py.exe"
-    if (Test-Path -LiteralPath $windowsAppsPy) {
-        $candidates += $windowsAppsPy
+    $windowsAppsManager = Join-Path (Get-WindowsAppsPath) "pymanager.exe"
+    if (Test-Path -LiteralPath $windowsAppsManager) {
+        $candidates += $windowsAppsManager
     }
 
     $pythonManagerDirs = Get-ChildItem -LiteralPath (Get-WindowsAppsPath) -Directory -Filter "PythonSoftwareFoundation.PythonManager_*" -ErrorAction SilentlyContinue
     foreach ($dir in $pythonManagerDirs) {
-        $candidate = Join-Path $dir.FullName "py.exe"
+        $candidate = Join-Path $dir.FullName "pymanager.exe"
         if (Test-Path -LiteralPath $candidate) {
             $candidates += $candidate
         }
     }
 
-    $existingPy = Get-CommandSourceIfAvailable -Name "py"
-    if ($existingPy) {
-        $candidates += $existingPy
-    }
-
-    $launcherCandidates = @()
-    if ($env:WINDIR) {
-        $launcherCandidates += (Join-Path $env:WINDIR "py.exe")
-    }
-    if ($env:LOCALAPPDATA) {
-        $launcherCandidates += (Join-Path $env:LOCALAPPDATA "Programs\Python\Launcher\py.exe")
-    }
-    if ($env:ProgramFiles) {
-        $launcherCandidates += (Join-Path $env:ProgramFiles "Python Launcher\py.exe")
-    }
-    if ($programFilesX86) {
-        $launcherCandidates += (Join-Path $programFilesX86 "Python Launcher\py.exe")
-    }
-
-    foreach ($candidate in $launcherCandidates | Select-Object -Unique) {
-        if (Test-Path -LiteralPath $candidate) {
-            $candidates += $candidate
-        }
+    $existingManager = Get-CommandSourceIfAvailable -Name "pymanager"
+    if ($existingManager) {
+        $candidates += $existingManager
     }
 
     return $candidates | Select-Object -Unique
 }
 
-function Get-PyCommandPath {
-    return Get-PyCommandCandidates | Select-Object -First 1
+function Get-PythonManagerCommandPath {
+    return Get-PythonManagerCommandCandidates | Select-Object -First 1
 }
 
-function Test-PythonInstallManagerAvailable {
-    param([string] $PyCommand)
+function Test-PythonManagerAvailable {
+    param([string] $PythonManagerCommand)
 
-    if ([string]::IsNullOrWhiteSpace($PyCommand)) {
+    if ([string]::IsNullOrWhiteSpace($PythonManagerCommand)) {
         return $false
     }
 
     try {
-        & $PyCommand install --help *> $null
+        & $PythonManagerCommand install --help *> $null
         $exitCodeVar = Get-Variable -Name LASTEXITCODE -ErrorAction SilentlyContinue
         return ($exitCodeVar -and [int] $exitCodeVar.Value -eq 0)
     }
@@ -381,16 +360,6 @@ function Get-PythonRuntimeStatus {
             FilePath  = $pythonCommand
             Arguments = @()
             Operation = "python runtime check"
-        }
-    }
-
-    $pyCommand = Get-PyCommandPath
-    if ($pyCommand) {
-        $candidates += [pscustomobject]@{
-            Launcher  = "py"
-            FilePath  = $pyCommand
-            Arguments = @("-V:3")
-            Operation = "py runtime check"
         }
     }
 
@@ -432,27 +401,17 @@ function Ensure-InstallerCommandPaths {
     }
 }
 
-function Get-PythonInstallManagerCommandPath {
-    foreach ($candidate in Get-PyCommandCandidates) {
-        if (Test-PythonInstallManagerAvailable -PyCommand $candidate) {
-            return $candidate
-        }
-    }
-
-    return $null
-}
-
 function Ensure-PythonCommandPaths {
     param(
         [psobject] $PythonStatus,
 
-        [string] $PyCommand
+        [string] $PythonManagerCommand
     )
 
-    if (-not [string]::IsNullOrWhiteSpace($PyCommand)) {
-        $pyDirectory = Split-Path -Parent $PyCommand
-        if ($pyDirectory.TrimEnd('\') -ine (Get-WindowsAppsPath).TrimEnd('\')) {
-            Ensure-PathEntryIfMissing -Entry $pyDirectory
+    if (-not [string]::IsNullOrWhiteSpace($PythonManagerCommand)) {
+        $pythonManagerDirectory = Split-Path -Parent $PythonManagerCommand
+        if ($pythonManagerDirectory.TrimEnd('\') -ine (Get-WindowsAppsPath).TrimEnd('\')) {
+            Ensure-PathEntryIfMissing -Entry $pythonManagerDirectory
         }
     }
 
@@ -474,7 +433,7 @@ function Ensure-PythonInstalled {
 
     $pythonStatus = Get-PythonRuntimeStatus
     if ($pythonStatus.Available -and $pythonStatus.Major -ge 3 -and $pythonStatus.Is64Bit) {
-        Ensure-PythonCommandPaths -PythonStatus $pythonStatus -PyCommand (Get-PyCommandPath)
+        Ensure-PythonCommandPaths -PythonStatus $pythonStatus -PythonManagerCommand (Get-PythonManagerCommandPath)
         Write-Host "A usable 64-bit Python 3 runtime is already installed."
         return
     }
@@ -492,8 +451,8 @@ function Ensure-PythonInstalled {
         throw "WinGet was not found. Install Python manually, then rerun install_server.bat."
     }
 
-    $pyCommand = Get-PythonInstallManagerCommandPath
-    if (-not (Test-PythonInstallManagerAvailable -PyCommand $pyCommand)) {
+    $pythonManagerCommand = Get-PythonManagerCommandPath
+    if (-not (Test-PythonManagerAvailable -PythonManagerCommand $pythonManagerCommand)) {
         Write-Host "Installing or updating the Python Install Manager..."
         & $wingetCommand upgrade --id $pythonManagerWingetId -e --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity
         $wingetExitCode = Get-NativeExitCodeOrZero
@@ -503,25 +462,25 @@ function Ensure-PythonInstalled {
         }
 
         Start-Sleep -Seconds 2
-        $pyCommand = Get-PythonInstallManagerCommandPath
+        $pythonManagerCommand = Get-PythonManagerCommandPath
     }
 
-    if (-not (Test-PythonInstallManagerAvailable -PyCommand $pyCommand)) {
-        throw "Python Install Manager is unavailable. Open 'Manage app execution aliases', enable the Python aliases, and remove the legacy 'Python Launcher' app if py.exe still points to the old launcher, then rerun install_server.bat."
+    if (-not (Test-PythonManagerAvailable -PythonManagerCommand $pythonManagerCommand)) {
+        throw "Python Install Manager is unavailable. Open 'Manage app execution aliases', enable the Python install manager aliases, and rerun install_server.bat."
     }
 
     Write-Host "Configuring the Python Install Manager..."
-    & $pyCommand install --configure -y
+    & $pythonManagerCommand install --configure -y
     Assert-LastExitCode -Operation "Configuring the Python Install Manager"
 
     $env:PYTHON_MANAGER_DEFAULT_PLATFORM = "-64"
 
     Write-Host "Installing the latest stable 64-bit Python runtime..."
-    & $pyCommand install default
+    & $pythonManagerCommand install default
     Assert-LastExitCode -Operation "Installing the latest stable 64-bit Python runtime"
 
     Write-Host "Refreshing Python command aliases..."
-    & $pyCommand install --refresh
+    & $pythonManagerCommand install --refresh
     Assert-LastExitCode -Operation "Refreshing Python command aliases"
 
     Start-Sleep -Seconds 2
@@ -530,7 +489,7 @@ function Ensure-PythonInstalled {
         throw "Python was installed, but a usable 64-bit Python 3 runtime is still unavailable. Restart Windows Terminal. If it still fails, open 'Manage app execution aliases' and enable the Python aliases."
     }
 
-    Ensure-PythonCommandPaths -PythonStatus $pythonStatus -PyCommand $pyCommand
+    Ensure-PythonCommandPaths -PythonStatus $pythonStatus -PythonManagerCommand $pythonManagerCommand
     Write-Host "Python is installed and ready for the FastDL HTTP server."
 }
 
@@ -622,13 +581,18 @@ function Test-IsLikelyServerModAssetFile {
     }
 
     $relativePath = $File.FullName.Substring($ServerModPath.Length).TrimStart('\')
+    $topLevelFolder = ($relativePath -split '[\\/]')[0]
+    if ($topLevelFolder -ieq "screenshots") {
+        return $false
+    }
+
     $isRootLevelFile = ($relativePath -notlike "*\*")
     $extension = $File.Extension.ToLowerInvariant()
     $junkExtensions = @(
-        ".txt", ".md", ".zip", ".rar", ".7z", ".bak", ".old", ".tmp",
+        ".md", ".zip", ".rar", ".7z", ".old",
         ".pdf", ".doc", ".docx", ".log", ".cfg",
-        ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tga", ".psd",
-        ".mp3", ".wav", ".ogg", ".mp4", ".avi", ".mkv"
+        ".psd",
+        ".mp4"
     )
     if ($extension -in $junkExtensions) {
         return $false
@@ -636,9 +600,18 @@ function Test-IsLikelyServerModAssetFile {
 
     $knownModExtensions = @(
         ".iwd", ".ff", ".gsc", ".csc", ".menu", ".csv", ".str", ".atr",
-        ".vision", ".sun", ".weapon", ".shader", ".hlsl"
+        ".vision", ".sun", ".weapon", ".shader", ".hlsl",
+        ".iwi", ".wav", ".mp3", ".efx", ".inc"
     )
     if ($extension -in $knownModExtensions) {
+        return $true
+    }
+
+    $knownModFolders = @(
+        "weapons", "images", "sound", "soundaliases",
+        "fx", "maps", "ui", "ui_mp"
+    )
+    if ($topLevelFolder -in $knownModFolders) {
         return $true
     }
 
