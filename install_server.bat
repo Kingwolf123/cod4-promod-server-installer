@@ -4,9 +4,11 @@ title COD4_PROMOD_SERVER_INSTALLER
 
 set "RELAUNCHED=0"
 set "ELEVATED_REQUESTED=0"
+set "WT_RELAUNCHED=0"
 for %%A in (%*) do (
     if /i "%%~A"=="--pwsh-relaunched" set "RELAUNCHED=1"
     if /i "%%~A"=="--elevated" set "ELEVATED_REQUESTED=1"
+    if /i "%%~A"=="--wt-relaunched" set "WT_RELAUNCHED=1"
 )
 
 call :is_elevated
@@ -14,7 +16,7 @@ if "%IS_ELEVATED%"=="1" goto continue_install
 if "%ELEVATED_REQUESTED%"=="1" goto elevation_failed
 
 echo Administrator access is required so the installer can configure PATH for future use.
-echo Click Yes on the Windows prompt to continue.
+echo Click Yes on the Windows prompt to continue. The installer will reopen in Windows Terminal.
 call :elevate_self
 if errorlevel 1 goto elevation_failed
 echo Installer relaunched with administrator access.
@@ -27,7 +29,7 @@ call :find_winget
 if defined WINGET_EXE goto winget_ready
 
 echo WinGet is required before installation can continue.
-echo This installer uses winget for PowerShell 7 and Python setup.
+echo This installer uses winget for Windows Terminal, PowerShell 7, and Python setup.
 choice /c YN /n /m "Install or repair WinGet automatically now? [Y/N] "
 if errorlevel 2 goto no_winget
 
@@ -42,6 +44,41 @@ goto winget_failed
 
 :winget_ready
 echo WinGet detected. Continuing with installer checks...
+
+call :find_wt
+if defined WT_EXE goto wt_ready
+
+:ensure_wt
+echo This package uses Windows Terminal for the installer and server launcher.
+choice /c YN /n /m "Install or upgrade Windows Terminal automatically now? [Y/N] "
+if errorlevel 2 goto no_wt
+
+echo Updating Windows Terminal to the latest release...
+"%WINGET_EXE%" upgrade --id Microsoft.WindowsTerminal -e --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity
+
+call :ensure_process_path_entry "%LOCALAPPDATA%\Microsoft\WindowsApps"
+call :find_wt
+if defined WT_EXE goto wt_ready
+
+echo Windows Terminal was not upgraded through winget. Trying a fresh install...
+"%WINGET_EXE%" install --id Microsoft.WindowsTerminal -e --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity
+if errorlevel 1 goto wt_failed
+
+call :ensure_process_path_entry "%LOCALAPPDATA%\Microsoft\WindowsApps"
+call :find_wt
+if defined WT_EXE goto wt_ready
+goto wt_failed
+
+:wt_ready
+if defined WT_SESSION goto wt_session_ready
+if "%WT_RELAUNCHED%"=="1" goto wt_session_ready
+
+echo Windows Terminal is ready. Reopening the installer there...
+call :relaunch_self_in_fresh_terminal "--wt-relaunched"
+if errorlevel 1 goto relaunch_failed
+goto finish_ok
+
+:wt_session_ready
 
 call :find_pwsh
 call :get_pwsh_major
@@ -84,12 +121,18 @@ if %PWSH_MAJOR% GEQ 7 goto run_installer
 
 :pwsh_still_missing
 if "%RELAUNCHED%"=="0" (
-    echo PowerShell was installed or upgraded. Reopening the installer in a fresh terminal...
-    start "COD4_PROMOD_SERVER_INSTALLER" "%ComSpec%" /k "\"%~f0\" --pwsh-relaunched"
+    echo PowerShell was installed or upgraded. Reopening the installer in a fresh Windows Terminal window...
+    call :relaunch_self_in_fresh_terminal "--pwsh-relaunched"
+    if errorlevel 1 goto relaunch_failed
     goto finish_ok
 )
 
 echo PowerShell was installed or upgraded, but the installer still could not locate pwsh.exe.
+echo Close this window, open a new one, and run install_server.bat again.
+goto finish_error
+
+:relaunch_failed
+echo The installer could not reopen itself in a fresh terminal window.
 echo Close this window, open a new one, and run install_server.bat again.
 goto finish_error
 
@@ -100,6 +143,15 @@ goto finish_error
 
 :no_winget
 echo The installer cannot continue without WinGet.
+goto finish_error
+
+:wt_failed
+echo Automatic Windows Terminal install or upgrade failed.
+echo Install Windows Terminal manually, then run install_server.bat again.
+goto finish_error
+
+:no_wt
+echo The installer cannot continue without Windows Terminal.
 goto finish_error
 
 :no_install
@@ -149,11 +201,10 @@ if not exist "%WINPS_EXE%" set "WINPS_EXE=powershell.exe"
 exit /b %errorlevel%
 
 :elevate_self
-set "WINPS_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
-if not exist "%WINPS_EXE%" set "WINPS_EXE=powershell.exe"
 set "ELEVATION_FLAGS=--elevated"
 if "%RELAUNCHED%"=="1" set "ELEVATION_FLAGS=%ELEVATION_FLAGS% --pwsh-relaunched"
-"%WINPS_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath $env:ComSpec -Verb RunAs -ArgumentList @('/c', '\"\"%~f0\" %ELEVATION_FLAGS%\"')" 
+call :start_self_in_windows_terminal "%ELEVATION_FLAGS%" "1"
+if errorlevel 1 call :start_self_in_console "%ELEVATION_FLAGS%" "1"
 exit /b %errorlevel%
 
 :is_elevated
@@ -182,6 +233,18 @@ if exist "%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe" (
         set "WINGET_EXE=%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe"
         exit /b 0
     )
+)
+exit /b 0
+
+:find_wt
+set "WT_EXE="
+for /f "delims=" %%I in ('where wt.exe 2^>nul') do (
+    set "WT_EXE=%%~fI"
+    goto :eof
+)
+if exist "%LOCALAPPDATA%\Microsoft\WindowsApps\wt.exe" (
+    set "WT_EXE=%LOCALAPPDATA%\Microsoft\WindowsApps\wt.exe"
+    goto :eof
 )
 exit /b 0
 
@@ -234,3 +297,33 @@ if not exist "%~1" exit /b 0
 echo(;%PATH%; | find /I ";%~1;" >nul
 if errorlevel 1 set "PATH=%~1;%PATH%"
 exit /b 0
+
+:relaunch_self_in_fresh_terminal
+call :start_self_in_windows_terminal "%~1" "0"
+if not errorlevel 1 exit /b 0
+call :start_self_in_console "%~1" "0"
+exit /b %errorlevel%
+
+:start_self_in_windows_terminal
+call :find_wt
+if not defined WT_EXE exit /b 1
+set "WINPS_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
+if not exist "%WINPS_EXE%" set "WINPS_EXE=powershell.exe"
+set "SELF_PATH=%~f0"
+set "SELF_FLAGS=%~1"
+set "SELF_RUNAS=%~2"
+"%WINPS_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "$quote = [char]34; $commandLine = $quote + $quote + $env:SELF_PATH + $quote; if (-not [string]::IsNullOrWhiteSpace($env:SELF_FLAGS)) { $commandLine += ' ' + $env:SELF_FLAGS }; $commandLine += $quote; $arguments = @('new-tab', '--title', 'COD4_PROMOD_SERVER_INSTALLER', 'cmd.exe', '/c', $commandLine); $startProcessParameters = @{ FilePath = $env:WT_EXE; ArgumentList = $arguments }; if ($env:SELF_RUNAS -eq '1') { $startProcessParameters.Verb = 'RunAs' }; Start-Process @startProcessParameters"
+set "SELF_PATH="
+set "SELF_FLAGS="
+set "SELF_RUNAS="
+exit /b %errorlevel%
+
+:start_self_in_console
+set "WINPS_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
+if not exist "%WINPS_EXE%" set "WINPS_EXE=powershell.exe"
+set "SELF_FLAGS=%~1"
+set "SELF_RUNAS=%~2"
+"%WINPS_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "$quote = [char]34; $commandLine = $quote + $quote + '%~f0' + $quote; if (-not [string]::IsNullOrWhiteSpace($env:SELF_FLAGS)) { $commandLine += ' ' + $env:SELF_FLAGS }; $commandLine += $quote; $startProcessParameters = @{ FilePath = $env:ComSpec; ArgumentList = @('/c', $commandLine) }; if ($env:SELF_RUNAS -eq '1') { $startProcessParameters.Verb = 'RunAs' }; Start-Process @startProcessParameters"
+set "SELF_FLAGS="
+set "SELF_RUNAS="
+exit /b %errorlevel%
