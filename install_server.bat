@@ -17,6 +17,8 @@ if "%ELEVATED_REQUESTED%"=="1" goto elevation_failed
 
 echo Administrator access is required so the installer can configure PATH for future use.
 echo Click Yes on the Windows prompt to continue. The installer will reopen in Windows Terminal.
+echo Press any key to show the Windows admin prompt . . .
+pause >nul
 call :elevate_self
 if errorlevel 1 goto elevation_failed
 echo Installer relaunched with administrator access.
