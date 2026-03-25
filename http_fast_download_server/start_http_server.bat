@@ -17,6 +17,11 @@ exit /b 1
 
 :find_pwsh
 set "PWSH_EXE="
+pwsh.exe -NoProfile -Command "$PSVersionTable.PSVersion.Major" >nul 2>nul
+if not errorlevel 1 (
+    set "PWSH_EXE=pwsh.exe"
+    goto :eof
+)
 if defined ProgramW6432 if exist "%ProgramW6432%\PowerShell\7\pwsh.exe" (
     set "PWSH_EXE=%ProgramW6432%\PowerShell\7\pwsh.exe"
     goto :eof

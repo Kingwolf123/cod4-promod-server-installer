@@ -906,6 +906,6 @@ Set-Content -LiteralPath $serverMatchCfg -Value $serverCfgContent -Encoding ASCI
 
 Write-Step "Done"
 Write-Host "Installation successful."
-Write-Host "Open server\start_match.bat to start the server."
+Write-Host "Open server\start_server.bat to start the server."
 Write-Host "When the server starts, copy the printed /connect automatically generated for you in the terminal ."
 

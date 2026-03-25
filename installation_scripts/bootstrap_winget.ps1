@@ -133,11 +133,11 @@ if ($psGallery -and $psGallery.InstallationPolicy -ne "Trusted") {
     Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted
 }
 
-Install-Module -Name "Microsoft.WinGet.Client" -Force -Repository "PSGallery" -Scope CurrentUser -AllowClobber | Out-Null
+Install-Module -Name "Microsoft.WinGet.Client" -Force -Repository "PSGallery" -Scope AllUsers -AllowClobber | Out-Null
 Import-Module Microsoft.WinGet.Client -Force
 
 Write-Host "Bootstrapping WinGet..."
-Repair-WinGetPackageManager -Force -Latest | Out-Null
+Repair-WinGetPackageManager -AllUsers | Out-Null
 
 Start-Sleep -Seconds 2
 Ensure-PathEntryIfMissing -Entry (Get-WindowsAppsPath)

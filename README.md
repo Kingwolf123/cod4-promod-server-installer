@@ -54,7 +54,7 @@ installation_scripts/
   install_server.ps1
   install_config.psd1
 server/
-  start_match.bat
+  start_server.bat
   start_script/
     start_services.ps1
     server_args.psd1
@@ -109,7 +109,7 @@ It:
 - validates required folders and files
 - writes updated values into `server_args.psd1` and `server_match.cfg`
 
-### `server/start_match.bat`
+### `server/start_server.bat`
 
 The main server startup entry point. This is where u start your game server . It opens everything with a single click needed for the server to get running. 
 
@@ -118,7 +118,7 @@ For details optionally  read the startup Behaviour Section below.
 
 ## Startup Behavior
 
-When you run `server\start_match.bat`, the launcher is intended to create separate Windows Terminal tabs for:
+When you run `server\start_server.bat`, the launcher is intended to create separate Windows Terminal tabs for:
 
 - the COD4 match server
 - the FastDL HTTP server
@@ -180,7 +180,7 @@ Although instructions already mentioned in the installer and beginner guide , re
    - `server\mods\<your_mod>\`
    - `http_fast_download_server\cod4\mods\<your_mod>\`
 7. Finish the server setup prompts.
-8. Run `server\start_match.bat`.
+8. Run `server\start_server.bat`.
 9. Copy the generated `connect [ipv6]:port` command from the connect-command tab and share it with players.
 
 For more detailed and complete guide, read [BEGINNER_GUIDE.txt](./BEGINNER_GUIDE.txt).

@@ -7,7 +7,7 @@ Quick result
 ------------
 After setup, you will mainly use:
 - install_server.bat
-- server\start_match.bat
+- server\start_server.bat
 
 Do the steps below in order.
 
@@ -115,13 +115,13 @@ The installer will update:
 Step 11 - Start the server
 --------------------------
 Double-click:
-- server\start_match.bat
+- server\start_server.bat
 
 This starts:
 - the COD4 match server
 - the HTTP fast download server
 
-Create a shortcut of start_match.bat if and copy it wherever convenient > Do NOT create a copy of this file to start.
+Create a shortcut of start_server.bat if and copy it wherever convenient > Do NOT create a copy of this file to start.
 
 Step 12 - Share the server address
 ----------------------------------

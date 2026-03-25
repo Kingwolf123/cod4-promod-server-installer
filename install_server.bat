@@ -3,7 +3,24 @@ setlocal EnableExtensions
 title COD4_PROMOD_SERVER_INSTALLER
 
 set "RELAUNCHED=0"
-if /i "%~1"=="--pwsh-relaunched" set "RELAUNCHED=1"
+set "ELEVATED_REQUESTED=0"
+for %%A in (%*) do (
+    if /i "%%~A"=="--pwsh-relaunched" set "RELAUNCHED=1"
+    if /i "%%~A"=="--elevated" set "ELEVATED_REQUESTED=1"
+)
+
+call :is_elevated
+if "%IS_ELEVATED%"=="1" goto continue_install
+if "%ELEVATED_REQUESTED%"=="1" goto elevation_failed
+
+echo Administrator access is required so the installer can configure PATH for future use.
+echo Click Yes on the Windows prompt to continue.
+call :elevate_self
+if errorlevel 1 goto elevation_failed
+echo Installer relaunched with administrator access.
+exit /b 0
+
+:continue_install
 
 call :ensure_process_path_entry "%LOCALAPPDATA%\Microsoft\WindowsApps"
 call :find_winget
@@ -89,6 +106,11 @@ goto finish_error
 echo The installer cannot continue without PowerShell 7.x.
 goto finish_error
 
+:elevation_failed
+echo Administrator access was not granted.
+echo Click Yes on the Windows prompt next time, then run install_server.bat again if needed.
+goto finish_error
+
 :run_installer
 "%PWSH_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0installation_scripts\install_server.ps1"
 set "INSTALL_EXIT=%errorlevel%"
@@ -98,7 +120,7 @@ goto finish_install
 echo.
 if "%INSTALL_EXIT%"=="0" (
     echo Installation successful.
-    echo Open server\start_match.bat to start the server.
+    echo Open server\start_server.bat to start the server.
 ) else (
     echo Installer failed with exit code %INSTALL_EXIT%.
 )
@@ -126,6 +148,20 @@ if not exist "%WINPS_EXE%" set "WINPS_EXE=powershell.exe"
 "%WINPS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0installation_scripts\bootstrap_winget.ps1"
 exit /b %errorlevel%
 
+:elevate_self
+set "WINPS_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
+if not exist "%WINPS_EXE%" set "WINPS_EXE=powershell.exe"
+set "ELEVATION_FLAGS=--elevated"
+if "%RELAUNCHED%"=="1" set "ELEVATION_FLAGS=%ELEVATION_FLAGS% --pwsh-relaunched"
+"%WINPS_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath $env:ComSpec -Verb RunAs -ArgumentList @('/c', '\"\"%~f0\" %ELEVATION_FLAGS%\"')" 
+exit /b %errorlevel%
+
+:is_elevated
+set "IS_ELEVATED=0"
+fltmc >nul 2>nul
+if not errorlevel 1 set "IS_ELEVATED=1"
+exit /b 0
+
 :find_winget
 set "WINGET_EXE="
 winget --version >nul 2>nul
@@ -151,6 +187,11 @@ exit /b 0
 
 :find_pwsh
 set "PWSH_EXE="
+pwsh.exe -NoProfile -Command "$PSVersionTable.PSVersion.Major" >nul 2>nul
+if not errorlevel 1 (
+    set "PWSH_EXE=pwsh.exe"
+    goto :eof
+)
 if defined ProgramW6432 if exist "%ProgramW6432%\PowerShell\7\pwsh.exe" (
     set "PWSH_EXE=%ProgramW6432%\PowerShell\7\pwsh.exe"
     goto :eof

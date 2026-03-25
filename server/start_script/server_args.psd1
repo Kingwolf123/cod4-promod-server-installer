@@ -1,6 +1,6 @@
 # Editing guide:
 # Read server\start_script\README.txt before changing this file.
-# start_match.bat only launches the server; the editable launch arguments are here.
+# start_server.bat only launches the server; the editable launch arguments are here.
 # Example: "+set", "net_port", "28962", becomes: +set net_port 28962
 # Example: "+map", "mp_crash" becomes: +map mp_crash
 @{
