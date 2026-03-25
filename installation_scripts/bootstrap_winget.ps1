@@ -6,67 +6,6 @@ function Get-WindowsAppsPath {
     return (Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps")
 }
 
-function Add-ProcessPathEntryIfMissing {
-    param([string] $Entry)
-
-    if ([string]::IsNullOrWhiteSpace($Entry) -or -not (Test-Path -LiteralPath $Entry)) {
-        return
-    }
-
-    $trimmedEntry = $Entry.TrimEnd('\')
-    $processParts = @()
-    if ($env:PATH) {
-        $processParts = $env:PATH -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-    }
-
-    $hasProcessEntry = $processParts | Where-Object { $_.TrimEnd('\') -ieq $trimmedEntry } | Select-Object -First 1
-    if (-not $hasProcessEntry) {
-        $env:PATH = if ($env:PATH) { "$Entry;$env:PATH" } else { $Entry }
-    }
-}
-
-function Add-PersistentPathEntryIfMissing {
-    param([string] $Entry)
-
-    if ([string]::IsNullOrWhiteSpace($Entry) -or -not (Test-Path -LiteralPath $Entry)) {
-        return
-    }
-
-    $trimmedEntry = $Entry.TrimEnd('\')
-    foreach ($scope in @("Machine", "User")) {
-        $scopePath = [Environment]::GetEnvironmentVariable("Path", $scope)
-        $scopePathParts = @()
-        if ($scopePath) {
-            $scopePathParts = $scopePath -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-        }
-
-        $hasScopeEntry = $scopePathParts | Where-Object { $_.TrimEnd('\') -ieq $trimmedEntry } | Select-Object -First 1
-        if ($hasScopeEntry) {
-            return
-        }
-    }
-
-    $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
-    $updatedMachinePath = if ($machinePath) { "$Entry;$machinePath" } else { $Entry }
-    try {
-        [Environment]::SetEnvironmentVariable("Path", $updatedMachinePath, "Machine")
-        return
-    }
-    catch {
-    }
-
-    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-    $updatedUserPath = if ($userPath) { "$Entry;$userPath" } else { $Entry }
-    [Environment]::SetEnvironmentVariable("Path", $updatedUserPath, "User")
-}
-
-function Ensure-PathEntryIfMissing {
-    param([string] $Entry)
-
-    Add-ProcessPathEntryIfMissing -Entry $Entry
-    Add-PersistentPathEntryIfMissing -Entry $Entry
-}
-
 function Test-WingetAvailable {
     try {
         & winget --version *> $null
@@ -105,8 +44,6 @@ function Request-WingetRegistration {
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
-Ensure-PathEntryIfMissing -Entry (Get-WindowsAppsPath)
-
 if (Test-WingetAvailable) {
     Write-Host "WinGet is already available."
     exit 0
@@ -140,7 +77,6 @@ Write-Host "Bootstrapping WinGet..."
 Repair-WinGetPackageManager -AllUsers | Out-Null
 
 Start-Sleep -Seconds 2
-Ensure-PathEntryIfMissing -Entry (Get-WindowsAppsPath)
 Request-WingetRegistration
 
 if (-not (Test-WingetAvailable)) {

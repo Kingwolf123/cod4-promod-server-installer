@@ -297,7 +297,7 @@ function Get-PythonExecutablePaths {
     return $candidates | Select-Object -Unique
 }
 
-function Get-PyCommandPath {
+function Get-PyCommandCandidates {
     $candidates = @()
     $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
 
@@ -339,7 +339,11 @@ function Get-PyCommandPath {
         }
     }
 
-    return $candidates | Select-Object -Unique | Select-Object -First 1
+    return $candidates | Select-Object -Unique
+}
+
+function Get-PyCommandPath {
+    return Get-PyCommandCandidates | Select-Object -First 1
 }
 
 function Test-PythonInstallManagerAvailable {
@@ -423,11 +427,19 @@ function Get-PythonRuntimeStatus {
 }
 
 function Ensure-InstallerCommandPaths {
-    Ensure-PathEntryIfMissing -Entry (Get-WindowsAppsPath)
-
     if ($PSHOME) {
         Ensure-PathEntryIfMissing -Entry $PSHOME
     }
+}
+
+function Get-PythonInstallManagerCommandPath {
+    foreach ($candidate in Get-PyCommandCandidates) {
+        if (Test-PythonInstallManagerAvailable -PyCommand $candidate) {
+            return $candidate
+        }
+    }
+
+    return $null
 }
 
 function Ensure-PythonCommandPaths {
@@ -437,11 +449,11 @@ function Ensure-PythonCommandPaths {
         [string] $PyCommand
     )
 
-    Ensure-PathEntryIfMissing -Entry (Get-WindowsAppsPath)
-
     if (-not [string]::IsNullOrWhiteSpace($PyCommand)) {
         $pyDirectory = Split-Path -Parent $PyCommand
-        Ensure-PathEntryIfMissing -Entry $pyDirectory
+        if ($pyDirectory.TrimEnd('\') -ine (Get-WindowsAppsPath).TrimEnd('\')) {
+            Ensure-PathEntryIfMissing -Entry $pyDirectory
+        }
     }
 
     if (-not $PythonStatus -or [string]::IsNullOrWhiteSpace($PythonStatus.Executable)) {
@@ -459,8 +471,6 @@ function Ensure-PythonCommandPaths {
 
 function Ensure-PythonInstalled {
     Write-Step "Python prerequisite"
-
-    Ensure-PathEntryIfMissing -Entry (Get-WindowsAppsPath)
 
     $pythonStatus = Get-PythonRuntimeStatus
     if ($pythonStatus.Available -and $pythonStatus.Major -ge 3 -and $pythonStatus.Is64Bit) {
@@ -482,7 +492,7 @@ function Ensure-PythonInstalled {
         throw "WinGet was not found. Install Python manually, then rerun install_server.bat."
     }
 
-    $pyCommand = Get-PyCommandPath
+    $pyCommand = Get-PythonInstallManagerCommandPath
     if (-not (Test-PythonInstallManagerAvailable -PyCommand $pyCommand)) {
         Write-Host "Installing or updating the Python Install Manager..."
         & $wingetCommand upgrade --id $pythonManagerWingetId -e --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity
@@ -493,12 +503,11 @@ function Ensure-PythonInstalled {
         }
 
         Start-Sleep -Seconds 2
-        Ensure-PathEntryIfMissing -Entry (Get-WindowsAppsPath)
-        $pyCommand = Get-PyCommandPath
+        $pyCommand = Get-PythonInstallManagerCommandPath
     }
 
     if (-not (Test-PythonInstallManagerAvailable -PyCommand $pyCommand)) {
-        throw "Python Install Manager is unavailable. Open 'Manage app execution aliases', enable the Python aliases, then rerun install_server.bat."
+        throw "Python Install Manager is unavailable. Open 'Manage app execution aliases', enable the Python aliases, and remove the legacy 'Python Launcher' app if py.exe still points to the old launcher, then rerun install_server.bat."
     }
 
     Write-Host "Configuring the Python Install Manager..."

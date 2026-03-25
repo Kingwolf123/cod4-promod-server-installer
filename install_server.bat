@@ -203,8 +203,7 @@ exit /b %errorlevel%
 :elevate_self
 set "ELEVATION_FLAGS=--elevated"
 if "%RELAUNCHED%"=="1" set "ELEVATION_FLAGS=%ELEVATION_FLAGS% --pwsh-relaunched"
-call :start_self_in_windows_terminal "%ELEVATION_FLAGS%" "1"
-if errorlevel 1 call :start_self_in_console "%ELEVATION_FLAGS%" "1"
+call :run_relaunch_helper "%ELEVATION_FLAGS%" "1"
 exit /b %errorlevel%
 
 :is_elevated
@@ -299,31 +298,18 @@ if errorlevel 1 set "PATH=%~1;%PATH%"
 exit /b 0
 
 :relaunch_self_in_fresh_terminal
-call :start_self_in_windows_terminal "%~1" "0"
-if not errorlevel 1 exit /b 0
-call :start_self_in_console "%~1" "0"
+call :run_relaunch_helper "%~1" "0"
 exit /b %errorlevel%
 
-:start_self_in_windows_terminal
-call :find_wt
-if not defined WT_EXE exit /b 1
+:run_relaunch_helper
 set "WINPS_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
 if not exist "%WINPS_EXE%" set "WINPS_EXE=powershell.exe"
-set "SELF_PATH=%~f0"
-set "SELF_FLAGS=%~1"
-set "SELF_RUNAS=%~2"
-"%WINPS_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "$quote = [char]34; $commandLine = $quote + $quote + $env:SELF_PATH + $quote; if (-not [string]::IsNullOrWhiteSpace($env:SELF_FLAGS)) { $commandLine += ' ' + $env:SELF_FLAGS }; $commandLine += $quote; $arguments = @('new-tab', '--title', 'COD4_PROMOD_SERVER_INSTALLER', 'cmd.exe', '/c', $commandLine); $startProcessParameters = @{ FilePath = $env:WT_EXE; ArgumentList = $arguments }; if ($env:SELF_RUNAS -eq '1') { $startProcessParameters.Verb = 'RunAs' }; Start-Process @startProcessParameters"
-set "SELF_PATH="
-set "SELF_FLAGS="
-set "SELF_RUNAS="
-exit /b %errorlevel%
-
-:start_self_in_console
-set "WINPS_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
-if not exist "%WINPS_EXE%" set "WINPS_EXE=powershell.exe"
-set "SELF_FLAGS=%~1"
-set "SELF_RUNAS=%~2"
-"%WINPS_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "$quote = [char]34; $commandLine = $quote + $quote + '%~f0' + $quote; if (-not [string]::IsNullOrWhiteSpace($env:SELF_FLAGS)) { $commandLine += ' ' + $env:SELF_FLAGS }; $commandLine += $quote; $startProcessParameters = @{ FilePath = $env:ComSpec; ArgumentList = @('/c', $commandLine) }; if ($env:SELF_RUNAS -eq '1') { $startProcessParameters.Verb = 'RunAs' }; Start-Process @startProcessParameters"
-set "SELF_FLAGS="
-set "SELF_RUNAS="
+set "COD4_INSTALLER_PATH=%~f0"
+set "COD4_INSTALLER_FLAGS=%~1"
+set "COD4_INSTALLER_ELEVATED=False"
+if "%~2"=="1" set "COD4_INSTALLER_ELEVATED=True"
+"%WINPS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0installation_scripts\relaunch_installer.ps1"
+set "COD4_INSTALLER_PATH="
+set "COD4_INSTALLER_FLAGS="
+set "COD4_INSTALLER_ELEVATED="
 exit /b %errorlevel%
