@@ -26,23 +26,79 @@ function Get-WindowsAppsPath {
     return (Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps")
 }
 
-function Get-PythonInvocation {
+function Get-PythonExecutablePaths {
+    $candidates = @()
+    $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+
     $pythonCommand = Get-CommandSourceIfAvailable -Name "python"
     if ($pythonCommand) {
+        $candidates += $pythonCommand
+    }
+
+    $searchRoots = @()
+    if ($env:LOCALAPPDATA) {
+        $searchRoots += (Join-Path $env:LOCALAPPDATA "Programs\Python")
+    }
+    if ($env:ProgramFiles) {
+        $searchRoots += (Join-Path $env:ProgramFiles "Python")
+    }
+    if ($programFilesX86) {
+        $searchRoots += (Join-Path $programFilesX86 "Python")
+    }
+
+    foreach ($root in $searchRoots | Select-Object -Unique) {
+        if (-not (Test-Path -LiteralPath $root)) {
+            continue
+        }
+
+        $pythonDirs = Get-ChildItem -LiteralPath $root -Directory -Filter "Python*" -ErrorAction SilentlyContinue
+        foreach ($pythonDir in $pythonDirs) {
+            $candidate = Join-Path $pythonDir.FullName "python.exe"
+            if (Test-Path -LiteralPath $candidate) {
+                $candidates += $candidate
+            }
+        }
+    }
+
+    return $candidates | Select-Object -Unique
+}
+
+function Get-PyCommandPath {
+    $candidates = @()
+    $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+
+    if ($env:WINDIR) {
+        $candidates += (Join-Path $env:WINDIR "py.exe")
+    }
+    if ($env:LOCALAPPDATA) {
+        $candidates += (Join-Path $env:LOCALAPPDATA "Programs\Python\Launcher\py.exe")
+    }
+    if ($env:ProgramFiles) {
+        $candidates += (Join-Path $env:ProgramFiles "Python Launcher\py.exe")
+    }
+    if ($programFilesX86) {
+        $candidates += (Join-Path $programFilesX86 "Python Launcher\py.exe")
+    }
+    $candidates += (Join-Path (Get-WindowsAppsPath) "py.exe")
+
+    foreach ($candidate in $candidates | Select-Object -Unique) {
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
+    }
+
+    return (Get-CommandSourceIfAvailable -Name "py")
+}
+
+function Get-PythonInvocation {
+    foreach ($pythonCommand in Get-PythonExecutablePaths) {
         return [pscustomobject]@{
             FilePath = $pythonCommand
             Arguments = @()
         }
     }
 
-    $pyCommand = Get-CommandSourceIfAvailable -Name "py"
-    if (-not $pyCommand) {
-        $windowsAppsPy = Join-Path (Get-WindowsAppsPath) "py.exe"
-        if (Test-Path -LiteralPath $windowsAppsPy) {
-            $pyCommand = $windowsAppsPy
-        }
-    }
-
+    $pyCommand = Get-PyCommandPath
     if ($pyCommand) {
         return [pscustomobject]@{
             FilePath = $pyCommand

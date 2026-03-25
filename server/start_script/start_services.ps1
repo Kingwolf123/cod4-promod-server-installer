@@ -33,6 +33,59 @@ function Get-WindowsTerminalPath {
     return "wt.exe"
 }
 
+function Get-CurrentPowerShellPath {
+    $pwshPath = Join-Path $PSHOME "pwsh.exe"
+    if (Test-Path -LiteralPath $pwshPath) {
+        return $pwshPath
+    }
+
+    return "pwsh.exe"
+}
+
+function Format-WindowsProcessArgument {
+    param([AllowEmptyString()][string] $Value)
+
+    if ($null -eq $Value -or $Value.Length -eq 0) {
+        return '""'
+    }
+
+    if ($Value -notmatch '[\s"]') {
+        return $Value
+    }
+
+    $builder = [System.Text.StringBuilder]::new()
+    [void] $builder.Append('"')
+    $pendingBackslashes = 0
+
+    foreach ($character in $Value.ToCharArray()) {
+        if ($character -eq '\') {
+            $pendingBackslashes++
+            continue
+        }
+
+        if ($character -eq '"') {
+            [void] $builder.Append('\' * (($pendingBackslashes * 2) + 1))
+            [void] $builder.Append('"')
+            $pendingBackslashes = 0
+            continue
+        }
+
+        if ($pendingBackslashes -gt 0) {
+            [void] $builder.Append('\' * $pendingBackslashes)
+            $pendingBackslashes = 0
+        }
+
+        [void] $builder.Append($character)
+    }
+
+    if ($pendingBackslashes -gt 0) {
+        [void] $builder.Append('\' * ($pendingBackslashes * 2))
+    }
+
+    [void] $builder.Append('"')
+    return $builder.ToString()
+}
+
 function Open-InWindowsTerminal {
     param(
         [Parameter(Mandatory = $true)]
@@ -52,6 +105,7 @@ function Open-InWindowsTerminal {
 
     $resolvedWorkingDirectory = (Resolve-Path -LiteralPath $WorkingDirectory).Path
     $scriptPath = Join-Path $PSScriptRoot "start_services.ps1"
+    $pwshPath = Get-CurrentPowerShellPath
 
     $argumentList = @()
     if ($WindowId) {
@@ -71,18 +125,19 @@ function Open-InWindowsTerminal {
     }
 
     $pwshArgs += @(
+        "-NoProfile",
         "-ExecutionPolicy", "Bypass",
         "-File", $scriptPath
     ) + $Arguments
 
     $argumentList += @(
         "-d", $resolvedWorkingDirectory,
-        "pwsh.exe"
+        $pwshPath
     ) + $pwshArgs
 
-    Start-Process -FilePath (Get-WindowsTerminalPath) -ArgumentList $argumentList | Out-Null
+    $quotedArgumentList = $argumentList | ForEach-Object { Format-WindowsProcessArgument -Value $_ }
+    Start-Process -FilePath (Get-WindowsTerminalPath) -ArgumentList ($quotedArgumentList -join ' ') | Out-Null
 }
-
 function Focus-WindowsTerminalTab {
     param(
         [string] $WindowId = "0",

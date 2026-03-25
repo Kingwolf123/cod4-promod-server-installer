@@ -6,7 +6,16 @@ $serverRoot = Join-Path $root "server"
 $httpRoot = Join-Path $root "http_fast_download_server"
 $config = Import-PowerShellDataFile -LiteralPath (Join-Path $PSScriptRoot "install_config.psd1")
 $cod4xServerZipUrl = "https://cod4x.ovh/uploads/short-url/kDLPuAqzAQvrQHSbLtCnl9EE9Ec.zip"
-$pythonManagerWingetId = "9NQ7512CXL7T"
+$pythonManagerWingetId = "Python.PythonInstallManager"
+
+function Get-NativeExitCodeOrZero {
+    $exitCodeVar = Get-Variable -Name LASTEXITCODE -ErrorAction SilentlyContinue
+    if ($exitCodeVar) {
+        return [int] $exitCodeVar.Value
+    }
+
+    return 0
+}
 
 function Write-Step {
     param([string] $Text)
@@ -194,6 +203,52 @@ function Add-ProcessPathEntryIfMissing {
     }
 }
 
+function Add-PersistentPathEntryIfMissing {
+    param([string] $Entry)
+
+    if ([string]::IsNullOrWhiteSpace($Entry) -or -not (Test-Path -LiteralPath $Entry)) {
+        return
+    }
+
+    $trimmedEntry = $Entry.TrimEnd('\')
+    foreach ($scope in @("Machine", "User")) {
+        $scopePath = [Environment]::GetEnvironmentVariable("Path", $scope)
+        $scopeParts = @()
+        if ($scopePath) {
+            $scopeParts = $scopePath -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        }
+
+        $hasScopeEntry = $scopeParts | Where-Object { $_.TrimEnd('\') -ieq $trimmedEntry } | Select-Object -First 1
+        if ($hasScopeEntry) {
+            return
+        }
+    }
+
+    $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $updatedMachinePath = if ($machinePath) { "$Entry;$machinePath" } else { $Entry }
+    try {
+        [Environment]::SetEnvironmentVariable("Path", $updatedMachinePath, "Machine")
+        return
+    }
+    catch {
+    }
+
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $updatedUserPath = if ($userPath) { "$Entry;$userPath" } else { $Entry }
+    [Environment]::SetEnvironmentVariable("Path", $updatedUserPath, "User")
+}
+
+function Ensure-PathEntryIfMissing {
+    param([string] $Entry)
+
+    if ([string]::IsNullOrWhiteSpace($Entry) -or -not (Test-Path -LiteralPath $Entry)) {
+        return
+    }
+
+    Add-ProcessPathEntryIfMissing -Entry $Entry
+    Add-PersistentPathEntryIfMissing -Entry $Entry
+}
+
 function Get-CommandSourceIfAvailable {
     param([string] $Name)
 
@@ -205,8 +260,46 @@ function Get-CommandSourceIfAvailable {
     return $null
 }
 
+function Get-PythonExecutablePaths {
+    $candidates = @()
+    $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+
+    $existingPython = Get-CommandSourceIfAvailable -Name "python"
+    if ($existingPython) {
+        $candidates += $existingPython
+    }
+
+    $searchRoots = @()
+    if ($env:LOCALAPPDATA) {
+        $searchRoots += (Join-Path $env:LOCALAPPDATA "Programs\Python")
+    }
+    if ($env:ProgramFiles) {
+        $searchRoots += (Join-Path $env:ProgramFiles "Python")
+    }
+    if ($programFilesX86) {
+        $searchRoots += (Join-Path $programFilesX86 "Python")
+    }
+
+    foreach ($root in $searchRoots | Select-Object -Unique) {
+        if (-not (Test-Path -LiteralPath $root)) {
+            continue
+        }
+
+        $pythonDirs = Get-ChildItem -LiteralPath $root -Directory -Filter "Python*" -ErrorAction SilentlyContinue
+        foreach ($pythonDir in $pythonDirs) {
+            $candidate = Join-Path $pythonDir.FullName "python.exe"
+            if (Test-Path -LiteralPath $candidate) {
+                $candidates += $candidate
+            }
+        }
+    }
+
+    return $candidates | Select-Object -Unique
+}
+
 function Get-PyCommandPath {
     $candidates = @()
+    $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
 
     $windowsAppsPy = Join-Path (Get-WindowsAppsPath) "py.exe"
     if (Test-Path -LiteralPath $windowsAppsPy) {
@@ -224,6 +317,26 @@ function Get-PyCommandPath {
     $existingPy = Get-CommandSourceIfAvailable -Name "py"
     if ($existingPy) {
         $candidates += $existingPy
+    }
+
+    $launcherCandidates = @()
+    if ($env:WINDIR) {
+        $launcherCandidates += (Join-Path $env:WINDIR "py.exe")
+    }
+    if ($env:LOCALAPPDATA) {
+        $launcherCandidates += (Join-Path $env:LOCALAPPDATA "Programs\Python\Launcher\py.exe")
+    }
+    if ($env:ProgramFiles) {
+        $launcherCandidates += (Join-Path $env:ProgramFiles "Python Launcher\py.exe")
+    }
+    if ($programFilesX86) {
+        $launcherCandidates += (Join-Path $programFilesX86 "Python Launcher\py.exe")
+    }
+
+    foreach ($candidate in $launcherCandidates | Select-Object -Unique) {
+        if (Test-Path -LiteralPath $candidate) {
+            $candidates += $candidate
+        }
     }
 
     return $candidates | Select-Object -Unique | Select-Object -First 1
@@ -258,8 +371,7 @@ function Get-PythonRuntimeStatus {
     $statusScript = 'import json, platform, sys; print(json.dumps({"major": sys.version_info[0], "bits": platform.architecture()[0], "executable": sys.executable}))'
     $candidates = @()
 
-    $pythonCommand = Get-CommandSourceIfAvailable -Name "python"
-    if ($pythonCommand) {
+    foreach ($pythonCommand in Get-PythonExecutablePaths) {
         $candidates += [pscustomobject]@{
             Launcher  = "python"
             FilePath  = $pythonCommand
@@ -310,13 +422,49 @@ function Get-PythonRuntimeStatus {
     return $bestStatus
 }
 
+function Ensure-InstallerCommandPaths {
+    Ensure-PathEntryIfMissing -Entry (Get-WindowsAppsPath)
+
+    if ($PSHOME) {
+        Ensure-PathEntryIfMissing -Entry $PSHOME
+    }
+}
+
+function Ensure-PythonCommandPaths {
+    param(
+        [psobject] $PythonStatus,
+
+        [string] $PyCommand
+    )
+
+    Ensure-PathEntryIfMissing -Entry (Get-WindowsAppsPath)
+
+    if (-not [string]::IsNullOrWhiteSpace($PyCommand)) {
+        $pyDirectory = Split-Path -Parent $PyCommand
+        Ensure-PathEntryIfMissing -Entry $pyDirectory
+    }
+
+    if (-not $PythonStatus -or [string]::IsNullOrWhiteSpace($PythonStatus.Executable)) {
+        return
+    }
+
+    $pythonDirectory = Split-Path -Parent $PythonStatus.Executable
+    Ensure-PathEntryIfMissing -Entry $pythonDirectory
+
+    $scriptsDirectory = Join-Path $pythonDirectory "Scripts"
+    if (Test-Path -LiteralPath $scriptsDirectory) {
+        Ensure-PathEntryIfMissing -Entry $scriptsDirectory
+    }
+}
+
 function Ensure-PythonInstalled {
     Write-Step "Python prerequisite"
 
-    Add-ProcessPathEntryIfMissing -Entry (Get-WindowsAppsPath)
+    Ensure-PathEntryIfMissing -Entry (Get-WindowsAppsPath)
 
     $pythonStatus = Get-PythonRuntimeStatus
     if ($pythonStatus.Available -and $pythonStatus.Major -ge 3 -and $pythonStatus.Is64Bit) {
+        Ensure-PythonCommandPaths -PythonStatus $pythonStatus -PyCommand (Get-PyCommandPath)
         Write-Host "A usable 64-bit Python 3 runtime is already installed."
         return
     }
@@ -337,15 +485,15 @@ function Ensure-PythonInstalled {
     $pyCommand = Get-PyCommandPath
     if (-not (Test-PythonInstallManagerAvailable -PyCommand $pyCommand)) {
         Write-Host "Installing or updating the Python Install Manager..."
-        & $wingetCommand upgrade --id $pythonManagerWingetId -e --accept-package-agreements --accept-source-agreements --disable-interactivity
+        & $wingetCommand upgrade --id $pythonManagerWingetId -e --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity
         $wingetExitCode = Get-NativeExitCodeOrZero
         if ($wingetExitCode -ne 0) {
-            & $wingetCommand install $pythonManagerWingetId -e --accept-package-agreements --accept-source-agreements --disable-interactivity
+            & $wingetCommand install --id $pythonManagerWingetId -e --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity
             Assert-LastExitCode -Operation "Installing the Python Install Manager"
         }
 
         Start-Sleep -Seconds 2
-        Add-ProcessPathEntryIfMissing -Entry (Get-WindowsAppsPath)
+        Ensure-PathEntryIfMissing -Entry (Get-WindowsAppsPath)
         $pyCommand = Get-PyCommandPath
     }
 
@@ -373,6 +521,7 @@ function Ensure-PythonInstalled {
         throw "Python was installed, but a usable 64-bit Python 3 runtime is still unavailable. Restart Windows Terminal. If it still fails, open 'Manage app execution aliases' and enable the Python aliases."
     }
 
+    Ensure-PythonCommandPaths -PythonStatus $pythonStatus -PyCommand $pyCommand
     Write-Host "Python is installed and ready for the FastDL HTTP server."
 }
 
@@ -654,6 +803,7 @@ function Wait-ForPromodFiles {
     Read-Host "Press Enter after you have copied the Promod/mod folder into both directories and copied server_match.cfg"
 }
 
+Ensure-InstallerCommandPaths
 Ensure-PythonInstalled
 Copy-BaseGameFiles
 Install-Cod4xServerFiles
