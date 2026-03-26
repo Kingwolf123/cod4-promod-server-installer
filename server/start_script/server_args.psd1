@@ -13,6 +13,10 @@
         # "LanIpv4" = prefer LAN/private IPv4 first, then ULA IPv6.
         # "UlaIpv6" = prefer ULA IPv6 first, then LAN/private IPv4.
         NoGlobalIpv6FastDlPreference = "LanIpv4"
+
+        # $false = rewrite sv_wwwBaseURL automatically.
+        # $true  = do not rewrite sv_wwwBaseURL. Set it manually in server_match.cfg.
+        UseManualFastDlUrl = $false
     }
 
     MatchServer = @(

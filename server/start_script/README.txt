@@ -25,6 +25,8 @@ IPv6 preference setting
   When no usable global IPv6 exists, prefer LAN/private IPv4 for `sv_wwwBaseURL`, then fall back to ULA IPv6.
 - `NoGlobalIpv6FastDlPreference = "UlaIpv6"`
   When no usable global IPv6 exists, prefer ULA IPv6 for `sv_wwwBaseURL`, then fall back to LAN/private IPv4.
+- `UseManualFastDlUrl = $true`
+  Disables automatic `sv_wwwBaseURL` rewriting. Edit `sv_wwwBaseURL` manually in `server_match.cfg` when you want full manual control over the FastDL URL.
 - In both fallback modes, the FastDL HTTP server still starts in dual-stack mode.
 
 Temporary IPv6 note

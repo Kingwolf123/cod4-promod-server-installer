@@ -462,6 +462,35 @@ function Get-FastDownloadUrl {
     return "http://${hostAddress}:$FastDlPort/$normalizedContentPath"
 }
 
+function Get-ValidatedConfiguredFastDownloadUrl {
+    param([string] $ConfigPath)
+
+    $configuredUrl = Get-ConfigQuotedValue -ConfigPath $ConfigPath -Directive "seta sv_wwwBaseURL"
+    if ([string]::IsNullOrWhiteSpace($configuredUrl)) {
+        throw "Launcher.UseManualFastDlUrl is enabled, but sv_wwwBaseURL in server_match.cfg is empty. Set it manually there first."
+    }
+
+    if ($configuredUrl -match "(?i)(your_ipv4|your_ip|\[ipv6\]|localhost)") {
+        throw "Launcher.UseManualFastDlUrl is enabled, but sv_wwwBaseURL in server_match.cfg is still a placeholder. Set it manually there first."
+    }
+
+    $trimmedUrl = $configuredUrl.Trim()
+    $uri = $null
+    if (-not [Uri]::TryCreate($trimmedUrl, [UriKind]::Absolute, [ref] $uri)) {
+        throw "sv_wwwBaseURL in server_match.cfg must be a valid absolute URL. Example: http://203.0.113.55:8000/cod4/"
+    }
+
+    if ($uri.Scheme -notin @("http", "https")) {
+        throw "sv_wwwBaseURL in server_match.cfg must start with http:// or https://"
+    }
+
+    if ([string]::IsNullOrWhiteSpace($uri.DnsSafeHost)) {
+        throw "sv_wwwBaseURL in server_match.cfg must include a host."
+    }
+
+    return $trimmedUrl
+}
+
 function Get-LauncherSettings {
     param(
         [hashtable] $ServerArgsConfig
@@ -525,6 +554,7 @@ function Get-MatchStartupContext {
     $launcherSettings = Get-LauncherSettings -ServerArgsConfig $serverArgsConfig
     $preferStableIpv6 = $false
     $noGlobalIpv6FastDlPreference = "LanIpv4"
+    $useManualFastDlUrl = $false
     if ($launcherSettings.ContainsKey("PreferStableIpv6")) {
         $preferStableIpv6 = [bool] $launcherSettings.PreferStableIpv6
     }
@@ -535,6 +565,9 @@ function Get-MatchStartupContext {
         }
 
         $noGlobalIpv6FastDlPreference = $configuredPreference
+    }
+    if ($launcherSettings.ContainsKey("UseManualFastDlUrl")) {
+        $useManualFastDlUrl = [bool] $launcherSettings.UseManualFastDlUrl
     }
 
     $modGame = Get-ServerArgValue -ServerArgs $serverArgs -Name "fs_game"
@@ -556,6 +589,7 @@ function Get-MatchStartupContext {
         ServerArgs       = $serverArgs
         ServerArgsConfig = $serverArgsConfig
         ServerRoot       = $serverRoot
+        UseManualFastDlUrl = $useManualFastDlUrl
     }
 }
 
@@ -599,12 +633,25 @@ function Update-FastDownloadUrl {
 
         [bool] $PreferStableIpv6 = $false,
 
+        [bool] $UseManualFastDlUrl = $false,
+
         [ValidateSet("LanIpv4", "UlaIpv6")]
         [string] $NoGlobalIpv6FastDlPreference = "LanIpv4"
     )
 
     if (-not (Test-Path -LiteralPath $ConfigPath)) {
         throw "Config file not found: $ConfigPath"
+    }
+
+    if ($UseManualFastDlUrl) {
+        [void] (Get-ValidatedConfiguredFastDownloadUrl -ConfigPath $ConfigPath)
+        Write-Host "Using the sv_wwwBaseURL already set in server_match.cfg."
+        return [pscustomobject]@{
+            Address       = ""
+            AddressFamily = "Manual"
+            EndpointType  = "Manual"
+            UseDualStack  = $true
+        }
     }
 
     $selectedEndpoint = Get-PreferredFastDownloadEndpoint `
@@ -786,6 +833,7 @@ function Start-MatchServer {
             -FastDlPort 8000 `
             -ContentPath "cod4/" `
             -PreferStableIpv6:$matchContext.PreferStableIpv6 `
+            -UseManualFastDlUrl:$matchContext.UseManualFastDlUrl `
             -NoGlobalIpv6FastDlPreference $matchContext.NoGlobalIpv6FastDlPreference
         $httpArguments = @("-Action", "Http", "-InTerminal", "-Port", "8000", "-Bind", "::")
         if (-not $fastDlEndpoint -or $fastDlEndpoint.UseDualStack) {
@@ -828,6 +876,7 @@ function Start-MatchServer {
         -FastDlPort 8000 `
         -ContentPath "cod4/" `
         -PreferStableIpv6:$matchContext.PreferStableIpv6 `
+        -UseManualFastDlUrl:$matchContext.UseManualFastDlUrl `
         -NoGlobalIpv6FastDlPreference $matchContext.NoGlobalIpv6FastDlPreference
     $httpArguments = @("-Action", "Http", "-InTerminal", "-Port", "8000", "-Bind", "::")
     if (-not $fastDlEndpoint -or $fastDlEndpoint.UseDualStack) {

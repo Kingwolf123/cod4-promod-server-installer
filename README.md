@@ -267,6 +267,8 @@ It:
 - locates a usable Python runtime
 - starts the built-in Python HTTP server bound to IPv6. If no GUA IPv6 is detected, it falls back to dual-stack and rewrites `sv_wwwBaseURL` using the no-GUA FastDL preference from `server_args.psd1` (`LanIpv4` first by default, or `UlaIpv6` if you choose it).
 
+ If you want full manual control, enable `UseManualFastDlUrl` in `server_args.psd1` and edit `sv_wwwBaseURL` manually in `server_match.cfg`.
+
 ## Additional Readings for the Curious 
 
 - [COD4X Server GitHub repository](https://github.com/callofduty4x/CoD4x_Server)
