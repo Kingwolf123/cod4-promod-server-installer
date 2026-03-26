@@ -38,7 +38,7 @@ $wtPath = Get-WindowsTerminalPath
 if ($wtPath) {
     $startProcessParameters = @{
         FilePath     = $wtPath
-        ArgumentList = @("new-tab", "--title", "COD4_PROMOD_SERVER_INSTALLER", "cmd.exe", "/c", $commandLine)
+        ArgumentList = @("new-tab", "--title", "COD4_SERVER_INSTALLER", "cmd.exe", "/c", $commandLine)
     }
 }
 else {

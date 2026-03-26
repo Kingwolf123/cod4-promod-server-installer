@@ -517,7 +517,7 @@ function Install-Cod4xServerFiles {
         return
     }
 
-    $tempRoot = Join-Path $env:TEMP "cod4_promod_server_installer"
+    $tempRoot = Join-Path $env:TEMP "cod4_server_installer"
     $extractRoot = Join-Path $tempRoot "expanded"
     try {
         $zipPath = Join-Path $tempRoot "cod4x_server.zip"
@@ -887,7 +887,10 @@ $serverCfgContent = Set-QuotedSetting -Content $serverCfgContent -Directive "set
 Set-Content -LiteralPath $serverMatchCfg -Value $serverCfgContent -Encoding ASCII
 
 Write-Step "Done"
-Write-Host "Installation successful."
+Write-Host "Installation successful !"
 Write-Host "Open server\start_server.bat to start the server."
+Write-Host ""
+Write-Host "IMPORTANT NOTE: Click Allow on all firewall prompts by python , cod4x18_dedrun.exe etc on the first use of start_server.bat"
+Write-Host "IMPORTANT NOTE:  DO NOT CLOSE ANYTHING ,Terminal Tabs or the cod4x server window ,  opened by start_server.bat EVERYTIME you run it, during the entire time of running the server"
+Write-Host ""
 Write-Host "When the server starts, copy the printed /connect automatically generated for you in the terminal ."
-

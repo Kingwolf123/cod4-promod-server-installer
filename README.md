@@ -1,13 +1,17 @@
 # COD4 Promod Server Installer for Windows (COD4X + FastDL)
 # Setup a promod server in 2 minutes.
 
-## How to use ( quick ): 
+## How to use (quick) : 
 
-- Download the cod4_promod_server.zip from the latest release 
-- run install server
+- Download the cod4_server.zip from the latest release 
+- run install_server.bat
 - follow the interactive installation 
 - Go to server/start_match to start.
 - Thats it. For Further details read instructions in Beginner_Guide.txt and below. Although all steps are covered in the interative install_server.bat process. You shoudnt need anything else to get started.  
+
+Make Sure you have 6 GB of free space where u extract cod4_server.zip (The server copies game files, not downloads).
+
+## Description
 
 This repository is a script-and-package layer for local distribution and deployment of a COD4 Promod server setup on Windows.
 The project provides the **installer scripts, startup scripts, FastDL launcher, folder structure, and editable config flow** needed to get a COD4 Promod server running with **COD4X**, **Python FastDL**, and **Windows Terminal**.
@@ -83,73 +87,6 @@ This repository does not include:
 
 You must provide the game and mod content yourself.
 
-## Description file contents
-
-### `install_server.bat`
-
-The main Windows entry point for installation.
-
-It:
-
-- checks for `winget`
-- checks for PowerShell 7
-- installs or upgrades PowerShell 7 if needed
-- runs the PowerShell installer script
-- keeps the terminal open at the end so the user can read the result
-
-### `installation_scripts/install_server.ps1`
-The main installer logic.
-
-It:
-
-- checks Python availability and can install it automatically
-- optionally copies base game files
-- optionally installs COD4X server files
-- asks for the Promod mod folder name and server settings
-- validates required folders and files
-- writes updated values into `server_args.psd1` and `server_match.cfg`
-
-### `server/start_server.bat`
-
-The main server startup entry point. This is where u start your game server . It opens everything with a single click needed for the server to get running. 
-
-It runs the server startup orchestration script 
-For details optionally  read the startup Behaviour Section below.
-
-## Startup Behavior
-
-When you run `server\start_server.bat`, the launcher is intended to create separate Windows Terminal tabs for:
-
-- the COD4 match server
-- the FastDL HTTP server
-- the connect command/status tab
-
-Important behavior:
-
-- the FastDL tab must remain open while players are downloading files
-- the connect-command tab is meant to remain visible for ease of use of copy pasting the complete connect ip command to your friends
-
-### `server/start_script/start_services.ps1`
-
-The startup orchestrator.
-
-It:
-
-- reads launcher settings from `server_args.psd1`
-- updates the FastDL base URL in `server_match.cfg`
-- finds a usable global IPv6 address
-- launches the COD4 match server in its own Windows Terminal tab
-- launches the FastDL HTTP server in its own Windows Terminal tab
-- opens a separate connect-command tab so the shareable connect line stays visible
-
-### `http_fast_download_server/startup_script.ps1`
-
-The FastDL server launcher.
-
-It:
-
-- locates a usable Python runtime
-- starts the built-in Python HTTP server bound to IPv6. If no GUA IPv6 is detected, it falls back to dual-stack and rewrites `sv_wwwBaseURL` using the no-GUA FastDL preference from `server_args.psd1` (`LanIpv4` first by default, or `UlaIpv6` if you choose it).
 
 ## Prerequisite and Requirements List
 
@@ -159,8 +96,10 @@ You need the following prerequisites:
 - winget
 - PowerShell 7
 - a usable 64-bit Python 3 runtime ( eg 3.14, 3.10 etc)
+- Latest Windows Terminal
 
-  Cod4 related:
+Cod4 related things needed :
+
 - base COD4 files
 - COD4X dedicated server files
 - a Promod mod   ( server_match.cfg is already provided and should be used for default promod match servers, but feel free to edit or change anything or add ur own)
@@ -181,7 +120,7 @@ Although instructions already mentioned in the installer and beginner guide , re
    - `http_fast_download_server\cod4\mods\<your_mod>\`
 7. Finish the server setup prompts.
 8. Run `server\start_server.bat`.
-9. Copy the generated `connect [ipv6]:port` command from the connect-command tab and share it with players.
+9. Copy the entire generated `connect [ipv6]:port;password sample` command from the connect-command tab and share it with players.
 
 For more detailed and complete guide, read [BEGINNER_GUIDE.txt](./BEGINNER_GUIDE.txt).
 
@@ -258,6 +197,75 @@ If startup fails, check:
 - the selected mod folder and `server_match.cfg`
 - whether you have a usable IPv6 address / properly setup ipv4
 - whether the FastDL tab is still running
+
+## Description file contents
+
+### `install_server.bat`
+
+The main Windows entry point for installation.
+
+It:
+
+- checks for `winget`
+- checks for PowerShell 7
+- installs or upgrades PowerShell 7 if needed
+- runs the PowerShell installer script
+- keeps the terminal open at the end so the user can read the result
+
+### `installation_scripts/install_server.ps1`
+
+The main installer logic.
+
+It:
+
+- checks Python availability and can install it automatically
+- optionally copies base game files
+- optionally installs COD4X server files
+- asks for the Promod mod folder name and server settings
+- validates required folders and files
+- writes updated values into `server_args.psd1` and `server_match.cfg`
+
+### `server/start_server.bat`
+
+The main server startup entry point. This is where u start your game server . It opens everything with a single click needed for the server to get running. 
+
+It runs the server startup orchestration script 
+For details optionally  read the startup Behaviour Section below.
+
+## Startup Behavior
+
+When you run `server\start_server.bat`, the launcher is intended to create separate Windows Terminal tabs for:
+
+- the COD4 match server
+- the FastDL HTTP server
+- the connect command/status tab
+
+Important behavior:
+
+- the FastDL tab must remain open while players are downloading files
+- the connect-command tab is meant to remain visible for ease of use of copy pasting the complete connect ip command to your friends
+
+### `server/start_script/start_services.ps1`
+
+The startup orchestrator.
+
+It:
+
+- reads launcher settings from `server_args.psd1`
+- updates the FastDL base URL in `server_match.cfg`
+- finds a usable global IPv6 address
+- launches the COD4 match server in its own Windows Terminal tab
+- launches the FastDL HTTP server in its own Windows Terminal tab
+- opens a separate connect-command tab so the shareable connect line stays visible
+
+### `http_fast_download_server/startup_script.ps1`
+
+The FastDL server launcher.
+
+It:
+
+- locates a usable Python runtime
+- starts the built-in Python HTTP server bound to IPv6. If no GUA IPv6 is detected, it falls back to dual-stack and rewrites `sv_wwwBaseURL` using the no-GUA FastDL preference from `server_args.psd1` (`LanIpv4` first by default, or `UlaIpv6` if you choose it).
 
 ## Additional Readings for the Curious 
 

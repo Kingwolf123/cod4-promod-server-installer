@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-title COD4_PROMOD_SERVER_INSTALLER
+title COD4_SERVER_INSTALLER
 
 set "RELAUNCHED=0"
 set "ELEVATED_REQUESTED=0"
@@ -103,7 +103,7 @@ if not defined PWSH_MAJOR goto install_pwsh_after_upgrade_check
 if %PWSH_MAJOR% GEQ 7 goto run_installer
 
 :install_pwsh_after_upgrade_check
-echo PowerShell was not upgraded through winget. Trying a fresh install...
+echo PowerShell was not upgraded through winget. No Prior PowerShell 7 installation was detected. Trying a fresh install...
 "%WINGET_EXE%" install --id Microsoft.PowerShell -e --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity
 if errorlevel 1 (
     echo Automatic PowerShell install or upgrade failed.
