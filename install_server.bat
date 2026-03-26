@@ -172,10 +172,7 @@ goto finish_install
 
 :finish_install
 echo.
-if "%INSTALL_EXIT%"=="0" (
-    echo Installation successful.
-    echo Open server\start_server.bat to start the server.
-) else (
+if not "%INSTALL_EXIT%"=="0" (
     echo Installer failed with exit code %INSTALL_EXIT%.
 )
 echo Press any key to continue . . .
